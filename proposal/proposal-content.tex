@@ -7,7 +7,7 @@ In the last decade, there has been increased usage of AI and ML in diverse secto
 This technology provides both boons and challenges, mostly pertaining to the trust of said technology \autocite{Radhakrishnan2020}.
 This makes model-degradation unacceptable in the current day and age for retaining trust and reliability.
 Model-degradation refers to the phenomenon by which an AI or ML model degrades in performance due to factors such as data-drift, concept-drift, etc. This can cause systems to behave in unexpected ways and decrease trust in the systems, causing companies to drop these systems for more robust alternatives.
-This paper aims to gain a better understanding of how XAI and DD-algorithms can be used in production environments to increase trust and predictability for both users and organizations wishing to use these models.
+This thesis aims to gain a better understanding of how XAI and DD-algorithms can be used in production environments to increase trust and predictability for both users and organizations wishing to use these models.
 
 %---------- State of the art --------------------------------------------------
 
@@ -15,7 +15,7 @@ This paper aims to gain a better understanding of how XAI and DD-algorithms can 
 \label{sec:literature}
 
 The current literature describes a multitude of techniques for handling model-degradation.
-This paper focuses on two distinct fields namely XAI \autocite{Ribeiro2016} and DD-algorithms \autocite{Bayram2022}.
+This thesis focuses on two distinct fields namely XAI \autocite{Ribeiro2016} and DD-algorithms \autocite{Bayram2022}.
 Both fields are studied in the context of turbofan motor degradation for predictive maintenance \autocite{Saxena2008}.
 Finally these pipelines are evaluated as a complementary test against simulated covariate shift of images \autocite{Hendrycks2019} to check if the same techniques are applicable for other application not pertaining to predictive maintenance with the use of sensors.
 
@@ -29,8 +29,8 @@ Supporting questions:
 \begin{itemize}
   \item How does model-degradation in turbofan predictive maintenance manifest in real world applications?
   \item Which Drift-detection- and Explainable AI-techniques are most accurate at timely detection of operational drift and model-degradation?
-  \item To what extent can the found methods be used when detecting and explaining operational drift, model-degradation and image corruption?
-  \item How do the found methods relate to each other in detection speed, accuracy and explainability?
+  \item To what extent can the examined methods be used when detecting and explaining operational drift, model-degradation and image corruption?
+  \item How do the examined methods relate to each other in detection speed, accuracy and explainability?
 \end{itemize}
 
 \subsection{Datasets}
@@ -50,7 +50,7 @@ Each of these types contribute to the final conclusion and have to be thoroughly
 
 \subsection{Drift-detection algorithms}
 Algorithms such as MDDM \autocite{Pesaranghader2017} and EDDM \autocite{baena2006early} are both designed to detect a change in data-distribution leading to model-degradation. Both are made to give real-time signals when a discrepancy between the apparent results and the expected results are shown to be significant.
-More DD-algorithms will be explored in this paper.
+More DD-algorithms will be explored in this thesis.
 \subsection{Drift-detection categories}
 There are fundamentally different categories of DD-algorithms that reside under concept-drift \autocite{Bayram2022}:
 \begin{itemize}
@@ -59,10 +59,10 @@ There are fundamentally different categories of DD-algorithms that reside under 
         \item Multiple hypothesis-based detection
         \item Contextual-based detection
 \end{itemize}
-This paper will limit its scope to the first three.
+This thesis will limit its scope to the first three.
 
 \subsection{XAI techniques}
-XAI-techniques like LIME \autocite{garreau2020explaining} and SHAP \autocite{VandenBroeck2022} are designed to give insight into the decision-making process of AI-models. These techniques can help to identify the cause of model-degradation by analyzing which features contribute most to the predictions.
+XAI-techniques like LIME \autocite{garreau2020explaining}, SHAP \autocite{VandenBroeck2022} and Grad-CAM \autocite{Selvaraju2019} are designed to give insight into the decision-making process of AI-models. These techniques can help to identify the cause of model-degradation by analyzing which features contribute most to the predictions.
 These have been shown to significantly help domain experts interpret otherwise hard-to-explain models.
 
 %---------- Methodology -------------------------------------------------------
@@ -83,6 +83,8 @@ When comparing several DD-algorithms (MDDM, EDDM, ADWIN/KSWIN, CUSUM, etc.), det
 \subsection{Integration of XAI techniques}
 When a detector flags a window, the XAI attributions (SHAP, LIME, saliency maps) are aggregated over pre- and post-drift windows.
 The comparison highlights which features/time-windows changed in importance.
+In predictive maintenance, this will manifest as changes in sensor importance.
+In CV, this will manifest as shifts in image-patch importance through saliency maps.
 
 \subsection{Evaluation}
 The detectors and explanations are evaluated using the following criteria:
