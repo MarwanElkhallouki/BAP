@@ -1,0 +1,128 @@
+%---------- Introduction ------------------------------------------------------
+
+\section{Introduction}
+\label{sec:introduction}
+
+In recent years there has been a significant increase in the use of AI and machine learning (ML) in many sectors, including predictive maintenance and computer vision. These technologies bring major benefits but also pose important challenges, especially regarding the reliability and trustworthiness of deployed systems. A key problem is trust: model degradation undermines operational trust and can make ML systems unacceptable for production use. Model degradation refers to the phenomenon where a model's performance deteriorates because of changes in the data distribution, data corruption, or other external factors. This can result in reduced accuracy and effectiveness, with potentially serious consequences in safety-critical settings. This is currently one of the main reasons companies are cautious about deploying AI systems in production \autocite{Radhakrishnan2020}.
+
+This research investigates how Explainable AI (XAI) and drift-detection techniques can be combined to better understand and manage model degradation in production for predictive maintenance and computer vision applications.
+
+%---------- State of the art --------------------------------------------------
+
+\section{Literature review}
+\label{sec:literature}
+
+The literature describes multiple approaches to detect and explain model degradation. This study focuses on two main areas: drift-detection algorithms \autocite{Bayram2022} and XAI techniques \autocite{Ribeiro2016}. Both will be explored in the context of turbofan degradation (CMAPSS) \autocite{Saxena2008}. We will also evaluate the pipeline on simulated covariate shift in image data (ImageNet-C) \autocite{Hendrycks2019} to test applicability across domains.
+
+\subsection{Research questions}
+The central research question is:
+\begin{quote}
+  	extit{How can drift-detection and XAI techniques be combined to timely detect and explain model degradation in turbofan predictive-maintenance scenarios, and to what extent are these techniques effective at identifying operational drift and image corruption?}
+\end{quote}
+
+Supporting questions:
+\begin{itemize}
+  \item How does model degradation manifest in a turbofan predictive-maintenance scenario?
+  \item Which drift-detection and XAI techniques are useful for timely detection and explanation of degradation?
+  \item To what extent can the selected techniques detect and explain operational drift and image corruption?
+  \item How do the chosen techniques compare in terms of detection latency, accuracy, and explanatory power?
+\end{itemize}
+
+\subsection{Datasets}
+We will use two datasets: CMAPSS (NASA) \autocite{Saxena2008} and ImageNet-C \autocite{Hendrycks2019}. CMAPSS provides sensor time-series for turbofan engines and is commonly used for predictive maintenance and remaining useful life (RUL) tasks. ImageNet-C contains common corruptions applied to ImageNet images and is used to evaluate robustness of computer vision models. To study gradual degradation, corrupted images will be introduced progressively during experiments.
+
+\subsection{Types of drift}
+Drift can take several forms: covariate drift (changes in input distribution), label drift (changes in output label distribution), and concept drift (changes in the conditional relationship between input and output) \autocite{Bayram2022}. Each type has different implications for detection and remediation.
+
+\subsection{Drift-detection algorithms}
+Algorithms such as MDDM \autocite{Pesaranghader2017} and EDDM \autocite{baena2006early} are designed to detect changes that may cause model degradation. These methods monitor performance or statistics derived from the data stream and raise alarms when significant deviations occur.
+
+\subsection{Drift-detection categories}
+Broad families of detectors include: distribution-based methods, performance-based methods, multiple-hypothesis based methods, and context-aware methods \autocite{Bayram2022}. Context-aware detection is out of scope for this project; we focus on the first three families.
+
+\subsection{XAI techniques}
+XAI tools like LIME \autocite{garreau2020explaining} and SHAP \autocite{VandenBroeck2022} provide local and global attributions that can help explain why a model's behavior changes. Aggregating explanations before and after detected drift windows can help localize features or image regions responsible for degradation.
+
+%---------- Methodology -------------------------------------------------------
+
+\section{Methodology}
+\label{sec:methodology}
+
+\subsection{Model selection}
+We will use representative models for each domain. For computer vision, convolutional neural networks (CNNs) will be used. For predictive maintenance (CMAPSS), sequence models such as RNNs or LSTMs will be considered for RUL prediction.
+
+\subsection{Implementation}
+We will implement and compare several drift-detection algorithms (MDDM, EDDM, ADWIN/KSWIN, CUSUM, etc.). Detectors will be applied either on model performance metrics (error rates, RUL error) or on raw/embedded data distributions depending on the method.
+
+\subsection{Integration of XAI techniques}
+When a detector flags a window, we will compute XAI attributions (SHAP, LIME, saliency maps) aggregated over pre- and post-drift windows. The comparison highlights which features/patches changed importance.
+
+\subsection{Evaluation}
+We will evaluate detectors and explanations using the following criteria:
+\begin{itemize}
+  \item \textbf{Detection latency}: samples/steps until alarm and false positive rate for each detector.
+  \item \textbf{Model impact}: accuracy drop on ImageNet-C and MAE/RMSE for RUL on CMAPSS before/after drift.
+  \item \textbf{Attribution stability}: shifts in average absolute SHAP/LIME values across sliding windows.
+  \item \textbf{Computational cost}: runtime/throughput overhead of detectors and XAI methods.
+  \item \textbf{PHM/NASA score}: asymmetric penalty for RUL errors as used in CMAPSS evaluations \autocite{Saxena2008}.
+\end{itemize}
+
+\subsection{Timeline}
+\begin{itemize}
+  \item \textbf{Week 1-2}: Literature review and final selection of detectors and XAI methods.
+  \item \textbf{Week 3-4}: Implement baseline models for ImageNet-C and CMAPSS.
+  \item \textbf{Week 5-6}: Integrate drift-detection algorithms into the pipelines.
+  \item \textbf{Week 7-8}: Integrate XAI methods and run initial evaluations.
+  \item \textbf{Week 9-10}: Extensive experiments and analysis.
+  \item \textbf{Week 11}: Prepare report and visualizations.
+  \item \textbf{Week 12}: Finalize the report and presentation.
+\end{itemize}
+
+%---------- Expected results --------------------------------------------------
+
+\section{Expected results and conclusion}
+\label{sec:expected_results}
+
+We expect two main outcomes: (1) a quantitative comparison of detectors on ImageNet-C and CMAPSS; and (2) an XAI-driven analysis explaining \textit{why} models degrade. The target audience (ML engineers and reliability teams) should obtain a reproducible pipeline combining detection and diagnosis.
+
+Hypotheses:
+\begin{itemize}
+  \item Performance- or statistic-based detectors (DDM/ADWIN/KSWIN/CUSUM) will detect drift faster than naive run-to-failure monitoring and will show lower false positive rates on CMAPSS than on ImageNet-C.
+  \item XAI measures (SHAP/LIME) will reveal significant shifts in feature/patch importance after drift; these shifts will correlate with performance degradation.
+  \item A combined pipeline (detect - explain - decide) will reduce time-to-intervention and unnecessary retraining by producing targeted alerts.
+\end{itemize}
+
+Reporting elements:
+\begin{itemize}
+  \item \textbf{Detection metrics}: latency, false positive rate, true positive rate.
+  \item \textbf{Model metrics}: top-1 accuracy drop on ImageNet-C; MAE/RMSE for RUL on CMAPSS before/after drift.
+  \item \textbf{XAI metrics}: shift in average absolute SHAP values per feature/sensor and attribution stability.
+  \item \textbf{Operational impact}: number of triggers for retrain/human review compared to baseline monitoring.
+\end{itemize}
+
+Mock-up visualizations and a reporting table will be produced during the experiments. Example expected table structure:
+
+\begin{table}[h]
+  \centering
+  \caption{Indicative reporting structure for detector and XAI results}
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{p{0.18\linewidth} p{0.26\linewidth} p{0.17\linewidth} p{0.16\linewidth} p{0.19\linewidth}}
+      \hline
+      	extbf{Dataset} & \textbf{Detector/XAI} & \textbf{Latency $\downarrow$} & \textbf{FP-rate $\downarrow$} & \textbf{Attribution shift} \\
+      \hline
+      ImageNet-C & DDM / ADWIN / KSWIN / CUSUM & \textit{n} samples & \textit{x\%} & Patch-importance shifts \\
+      ImageNet-C & SHAP / LIME & n/a & n/a & Top-k patches differ post-drift \\
+      CMAPSS & DDM / ADWIN / KSWIN / CUSUM & \textit{n} cycles & \textit{x\%} & Sensor importance shifts \\
+      CMAPSS & SHAP / LIME & n/a & n/a & Top sensors differ post-drift \\
+      \hline
+    \end{tabular}
+\end{table}
+
+Value for practitioners:
+\begin{itemize}
+  \item A reproducible pipeline (detection + XAI) that provides faster, more focused alerts than simple performance monitoring.
+  \item Clear visualizations for operators that explain which features or image patches changed and why this points to degradation.
+  \item Practical guidelines on when to retrain, when to involve humans, and which detector suits which context.
+\end{itemize}
+

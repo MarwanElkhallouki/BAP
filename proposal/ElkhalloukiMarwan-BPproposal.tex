@@ -1,0 +1,40 @@
+%==============================================================================
+% Research proposal template (English copy)
+%==============================================================================
+\documentclass[english]{hogent-article}
+
+% Bibliography file
+\addbibresource{proposal.bib}
+
+% Programme information
+\studyprogramme{Bachelor of applied information technology}
+\course{Bachelor thesis}
+\assignmenttype{Research proposal}
+
+\academicyear{2025-2026}
+
+\title{XAI-Supported Evaluation of Model Degradation in Vision and Predictive Maintenance Applications}
+
+\author{Marwan Elkhallouki}
+\email{marwan.elkhallouki@student.hogent.be}
+
+\supervisor[Co-promotor]{F. Papadopoulou (Ugent, \href{mailto:Foteini.Papadopoulou@UGent.be}{Foteini.Papadopoulou@UGent.be})}
+
+\specialisation{AI \& Data Engineering}
+\keywords{XAI, AI, drift, opencv}
+
+\begin{document}
+
+\begin{abstract}
+  In the context of the notable increase of AI and machine learning use in sectors such as predictive maintenance and computer vision (CV), this research focuses on tackling the challenge of model degradation by employing Explainable AI (XAI) techniques combined with drift detection algorithms. The XAI methods investigated in this study include techniques such as LIME \autocite{garreau2020explaining} and SHAP \autocite{VandenBroeck2022}, which provide deeper insight into the decision-making of models affected by drift. By combining these techniques with drift detection algorithms such as MDDM \autocite{Pesaranghader2017} and EDDM \autocite{baena2006early}, we expect that this combination improves the detection and interpretation of model degradation. We will use CMAPSS (NASA) \autocite{Saxena2008} and ImageNet-C \autocite{Hendrycks2019} as datasets to evaluate the effectiveness of these approaches. Expected outcomes include a better understanding of model degradation and practical recommendations for deploying XAI-supported drift detection in real-world AI applications, contributing to the reliability and effectiveness of AI systems in critical domains.
+
+\end{abstract}
+
+\tableofcontents
+
+% Main text is in a separate file for convenience
+\input{proposal-content}
+
+\printbibliography[heading=bibintoc]
+
+\end{document}

@@ -15,37 +15,75 @@
 \section{Inleiding}%
 \label{sec:inleiding}
 
-Waarover zal je bachelorproef gaan? Introduceer het thema en zorg dat volgende zaken zeker duidelijk aanwezig zijn:
+In de laatste jaren is een significante toename te zien in het gebruik van AI en machine learning (ML) in diverse sectoren, waaronder predictive maintenance en computer vision.
+Deze technologie biedt grote voordelen alsook even grote uitdagingen, vooral wat betreft de betrouwbaarheid van deze systemen.
+Een van de meeste prominente problemen is vertrouwen. Dit zorgt dat modeldegradatie niet acceptabel is voor het behouden van vertrouwen. Modeldegradatie is het fenomeen waarbij de prestatie van een ML-model afneemt door verandering van de data-distributie, corruptie van data, of andere externe factoren.
+Dit kan leiden tot een verlaging in de nauwkeurigheid en effectiviteit van deze systemen, wat kan zorgen voor ernstige gevolgen in kritische toepassingen.
+Dit is huidig een van de grootste redenen waarom bedrijven in productie AI-systemen nog steeds vermijden \autocite{Radhakrishnan2020}.
+Dit onderzoek richt de vraag te beantwoorden hoe Explainable AI (XAI) en driftdetectie technieken kunnen worden ingezet om modeldegradatie beter te begrijpen en te beheren in predictive maintenance en computer vision-toepassingen in productieomgevingen.
 
-\begin{itemize}
-  \item kaderen thema
-  \item de doelgroep
-  \item de probleemstelling en (centrale) onderzoeksvraag
-  \item de onderzoeksdoelstelling
-\end{itemize}
 
-Denk er aan: een typische bachelorproef is \textit{toegepast onderzoek}, wat betekent dat je start vanuit een concrete probleemsituatie in bedrijfscontext, een \textbf{casus}. Het is belangrijk om je onderwerp goed af te bakenen: je gaat voor die \textit{ene specifieke probleemsituatie} op zoek naar een goede oplossing, op basis van de huidige kennis in het vakgebied.
+% Waarover zal je bachelorproef gaan? Introduceer het thema en zorg dat volgende zaken zeker duidelijk aanwezig zijn:
 
-De doelgroep moet ook concreet en duidelijk zijn, dus geen algemene of vaag gedefinieerde groepen zoals \emph{bedrijven}, \emph{developers}, \emph{Vlamingen}, enz. Je richt je in elk geval op it-professionals, een bachelorproef is geen populariserende tekst. Eén specifiek bedrijf (die te maken hebben met een concrete probleemsituatie) is dus beter dan \emph{bedrijven} in het algemeen.
+% \begin{itemize}
+%   \item kaderen thema
+%   \item de doelgroep
+%   \item de probleemstelling en (centrale) onderzoeksvraag
+%   \item de onderzoeksdoelstelling
+% \end{itemize}
 
-Formuleer duidelijk de onderzoeksvraag! De begeleiders lezen nog steeds te veel voorstellen waarin we geen onderzoeksvraag terugvinden.
+% Denk er aan: een typische bachelorproef is \textit{toegepast onderzoek}, wat betekent dat je start vanuit een concrete probleemsituatie in bedrijfscontext, een \textbf{casus}. Het is belangrijk om je onderwerp goed af te bakenen: je gaat voor die \textit{ene specifieke probleemsituatie} op zoek naar een goede oplossing, op basis van de huidige kennis in het vakgebied.
 
-Schrijf ook iets over de doelstelling. Wat zie je als het concrete eindresultaat van je onderzoek, naast de uitgeschreven scriptie? Is het een proof-of-concept, een rapport met aanbevelingen, \ldots Met welk eindresultaat kan je je bachelorproef als een succes beschouwen?
+% De doelgroep moet ook concreet en duidelijk zijn, dus geen algemene of vaag gedefinieerde groepen zoals \emph{bedrijven}, \emph{developers}, \emph{Vlamingen}, enz. Je richt je in elk geval op it-professionals, een bachelorproef is geen populariserende tekst. Eén specifiek bedrijf (die te maken hebben met een concrete probleemsituatie) is dus beter dan \emph{bedrijven} in het algemeen.
+
+% Formuleer duidelijk de onderzoeksvraag! De begeleiders lezen nog steeds te veel voorstellen waarin we geen onderzoeksvraag terugvinden.
+
+% Schrijf ook iets over de doelstelling. Wat zie je als het concrete eindresultaat van je onderzoek, naast de uitgeschreven scriptie? Is het een proof-of-concept, een rapport met aanbevelingen, \ldots Met welk eindresultaat kan je je bachelorproef als een succes beschouwen?
 
 %---------- Stand van zaken ---------------------------------------------------
 
 \section{Literatuurstudie}%
 \label{sec:literatuurstudie}
 
-Hier beschrijf je de \emph{state-of-the-art} rondom je gekozen onderzoeksdomein, d.w.z.\ een inleidende, doorlopende tekst over het onderzoeksdomein van je bachelorproef. Je steunt daarbij heel sterk op de professionele \emph{vakliteratuur}, en niet zozeer op populariserende teksten voor een breed publiek. Wat is de huidige stand van zaken in dit domein, en wat zijn nog eventuele open vragen (die misschien de aanleiding waren tot je onderzoeksvraag!)?
+In de huidige literatuur zijn er een aantal vaak besproken technieken wanneer het gaat over modeldegradatie in AI-systemen. Dit onderzoek zal zich richten op twee hoofdgebieden: driftdetectie-algoritmen \autocite{Bayram2022} en XAI technieken \autocite{Ribeiro2016}. Beide gebieden zullen worden onderzocht in de context van de degradatie van turbofanmotoren \autocite{Saxena2008}. Uiteindelijk zal de pipeline als complement worden geëvalueerd op gesimuleerde covariante shift in beelddata \autocite{Hendrycks2019} om te onderzoeken of dezelfde technieken even bruikbaar zijn voor andere aplicaties.
 
-Je mag de titel van deze sectie ook aanpassen (literatuurstudie, stand van zaken, enz.). Zijn er al gelijkaardige onderzoeken gevoerd? Wat concluderen ze? Wat is het verschil met jouw onderzoek?
+\subsection{Onderzoeksvragen}
+De centrale onderzoeksvraag van dit onderzoek is:
+\begin{quote}
+	\textit{Hoe kunnen driftdetectie- en XAI-technieken gecombineerd worden om modeldegradatie in turbofan-predictive-maintenance scenario's tijdig te detecteren en verklaren, en in welke mate zijn deze technieken effectief in het identificeren van operationele drift en beeldcorruptie?}
+\end{quote}
+\begin{itemize}
+		\item Hoe manifesteerd modeldegradatie in een turbofan-predictive-maintenance scenario?
+		\item Welke drift-detectie- en XAI-technieken zijn nuttig om degradatie tijdig te detecteren en verklaren?
+		\item In welke mate kunnen de gevonden technieken gebruikt worden om operationele drift en beeld corruptie te detecteren en verklaren?
+		\item Hoe verhouden de gevonden technieken zich tot elkaar in termen van detectiesnelheid, nauwkeurigheid en verklaringskracht?
+\end{itemize}
 
-Verwijs bij elke introductie van een term of bewering over het domein naar de vakliteratuur, bijvoorbeeld~\autocite{Hykes2013}! Denk zeker goed na welke werken je refereert en waarom.
+\subsection{Datasets}
+Voor dit onderzoek zal er gebruik gemaakt worden van twee verschillende datasets: CMAPSS (NASA) \autocite{Saxena2008} en ImageNet-C \autocite{Hendrycks2019}. CMAPS (NASA) is een veelgebruikte dataset die bestaat uit sensordata van turbofanmotoren die gebruikt wordt voor predictive maintenance taken. ImageNet-C is een uitgebreide dataset die bestaat uit gecorrumpeerde beelden die gebruikt worden om de robuustheid van computer vision modellen te testen. Voor het simuleren van graduele tijdsgebonden corruptie zullen de corrupte beelden gradueel worden toegevoegd.
 
-Draag zorg voor correcte literatuurverwijzingen! Een bronvermelding hoort thuis \emph{binnen} de zin waar je je op die bron baseert, dus niet er buiten! Maak meteen een verwijzing als je gebruik maakt van een bron. Doe dit dus \emph{niet} aan het einde van een lange paragraaf. Baseer nooit teveel aansluitende tekst op eenzelfde bron.
+\subsection{Drift-types}
+Er zijn verschillende types drift die zich kunnen voordoen in data-distributies, waaronder covariante drift, label drift en concept drift \autocite{Bayram2022}. Covariante drift is een verandering in de verdeling van de inputdata, terwijl label drift verwijst naar een verandering in de verdeling van de ouput labels. Concept drift is een verandering van beide de inputdata en de output labels. Elk van deze types hebben een andere impact op de conclusies die moeten worden getrokken uit de data.
 
-Als je informatie over bronnen verzamelt in JabRef, zorg er dan voor dat alle nodige info aanwezig is om de bron terug te vinden (zoals uitvoerig besproken in de lessen Research Methods).
+\subsection{Driftdetectie-algoritmen}
+Driftdetectie-algoritmen zoals MDDM \autocite{Pesaranghader2017} en EDDM \autocite{baena2006early} zijn beide ontwikkeld om een verandering in data-distributie op te sporen die kan leiden tot modeldegradatie. Deze algoritmen bekijken de prestatie van het model in real-time en signaleren wanneer er een discrepantie is tussen de verwachte en werkelijke prestatie vertoont.
+
+\subsection{Driftdetectie-types}
+Er zijn verschillende fundamenteel verschillende soorten driftdetectie onder concept drift detectie \autocite{Bayram2022}. De belangerijkste zijn: data-distributie gebaseerde detectie, prestatie gebaseerde detectie, meerdere hypothese gebaseerde detectie en context gebaseerde detectie. Omdat context gebaseerde detectie buiten de scope van dit onderzoek valt, zal de focus liggen op de eerste drie types.
+
+
+\subsection{XAI technieken}
+Daarnaast zijn er ook Explainable AI (XAI) technieken zoals LIME \autocite{garreau2020explaining} en SHAP \autocite{VandenBroeck2022} die ontworpen zijn om inzicht te geven in de besluitvorming van AI-modellen. Deze technieken kunnen helpen bij het identificeren van de oorzaken van modeldegradatie door te laten zien welke kenmerken van de inputdata het meest bijdragen aan de voorspellingen van het model. Beide tonen significante verbetering in nauwkeurigheid van de modellen door de manuele interventie van domeinexperten die de verklaringen van de modellen kunnen interpreteren.
+
+% Hier beschrijf je de \emph{state-of-the-art} rondom je gekozen onderzoeksdomein, d.w.z.\ een inleidende, doorlopende tekst over het onderzoeksdomein van je bachelorproef. Je steunt daarbij heel sterk op de professionele \emph{vakliteratuur}, en niet zozeer op populariserende teksten voor een breed publiek. Wat is de huidige stand van zaken in dit domein, en wat zijn nog eventuele open vragen (die misschien de aanleiding waren tot je onderzoeksvraag!)?
+
+% Je mag de titel van deze sectie ook aanpassen (literatuurstudie, stand van zaken, enz.). Zijn er al gelijkaardige onderzoeken gevoerd? Wat concluderen ze? Wat is het verschil met jouw onderzoek?
+
+% Verwijs bij elke introductie van een term of bewering over het domein naar de vakliteratuur, bijvoorbeeld~\autocite{Hykes2013}! Denk zeker goed na welke werken je refereert en waarom.
+
+% Draag zorg voor correcte literatuurverwijzingen! Een bronvermelding hoort thuis \emph{binnen} de zin waar je je op die bron baseert, dus niet er buiten! Maak meteen een verwijzing als je gebruik maakt van een bron. Doe dit dus \emph{niet} aan het einde van een lange paragraaf. Baseer nooit teveel aansluitende tekst op eenzelfde bron.
+
+% Als je informatie over bronnen verzamelt in JabRef, zorg er dan voor dat alle nodige info aanwezig is om de bron terug te vinden (zoals uitvoerig besproken in de lessen Research Methods).
 
 % Voor literatuurverwijzingen zijn er twee belangrijke commando's:
 % \autocite{KEY} => (Auteur, jaartal) Gebruik dit als de naam van de auteur
@@ -54,31 +92,128 @@ Als je informatie over bronnen verzamelt in JabRef, zorg er dan voor dat alle no
 %   functie heeft in de zin (bv. ``Uit onderzoek door Doll & Hill (1954) bleek
 %   ...'')
 
-Je mag deze sectie nog verder onderverdelen in subsecties als dit de structuur van de tekst kan verduidelijken.
+% Je mag deze sectie nog verder onderverdelen in subsecties als dit de structuur van de tekst kan verduidelijken.
 
 %---------- Methodologie ------------------------------------------------------
 \section{Methodologie}%
 \label{sec:methodologie}
 
-Hier beschrijf je hoe je van plan bent het onderzoek te voeren. Welke onderzoekstechniek ga je toepassen om elk van je onderzoeksvragen te beantwoorden? Gebruik je hiervoor literatuurstudie, interviews met belanghebbenden (bv.~voor requirements-analyse), experimenten, simulaties, vergelijkende studie, risico-analyse, PoC, \ldots?
+\subsection{Model Selectie}
+Door het gebruik van verschillende datasets zoals ImageNet-C \autocite{Hendrycks2019} voor computer vision (CV) en CMAPSS (NASA) \autocite{Saxena2008} voor predictive maintenance, zal er gebruik gemaakt worden van verschillende modellen die representatief zijn voor deze domeinen. Voor CV zal er gebruik gemaakt worden van convolutionele neurale netwerken (CNN's). Voor predictive maintenance zal er gebruik gemaakt worden van RNN's en LSTM's.
 
-Valt je onderwerp onder één van de typische soorten bachelorproeven die besproken zijn in de lessen Research Methods (bv.\ vergelijkende studie of risico-analyse)? Zorg er dan ook voor dat we duidelijk de verschillende stappen terug vinden die we verwachten in dit soort onderzoek!
+\subsection{Implementatie}
+Verschillende driftdetectie-algoritmen zoals MDDM \autocite{Pesaranghader2017}, EDDM \autocite{baena2006early}, etc., zullen worden gebruikt om de veranderingen in de data-distributie te detecteren. Deze modellen zullen worden gebruikt om in real-time de degradatie te detecteren.
 
-Vermijd onderzoekstechnieken die geen objectieve, meetbare resultaten kunnen opleveren. Enquêtes, bijvoorbeeld, zijn voor een bachelorproef informatica meestal \textbf{niet geschikt}. De antwoorden zijn eerder meningen dan feiten en in de praktijk blijkt het ook bijzonder moeilijk om voldoende respondenten te vinden. Studenten die een enquête willen voeren, hebben meestal ook geen goede definitie van de populatie, waardoor ook niet kan aangetoond worden dat eventuele resultaten representatief zijn.
+\subsection{Integratie van XAI technieken}
+De gekozen XAI technieken zoals LIME \autocite{garreau2020explaining}, SHAP \autocite{VandenBroeck2022}, etc., zullen worden geïntegreerd om inzicht te geven in de ervaren drift. Dit zal helpen bij het ondervinden van de oorzaken van modeldegradatie.
 
-Uit dit onderdeel moet duidelijk naar voor komen dat je bachelorproef ook technisch voldoen\-de diepgang zal bevatten. Het zou niet kloppen als een bachelorproef informatica ook door bv.\ een student marketing zou kunnen uitgevoerd worden.
+\subsection{Evaluatie}
+De modellen zullen worden geevalueerd eens er drift is gedetecteerd en vervolgens zal een gedetailleerde analyse worden uitgevoerd om de reden en effectievieteit van de drift te onderzoeken. De effectievieteit van de XAI technieken zal worden beoordeeld op basis van hoe goed ze verklaring bieden naar de gedetecteerde drift.
 
-Je beschrijft ook al welke tools (hardware, software, diensten, \ldots) je denkt hiervoor te gebruiken of te ontwikkelen.
+Extra evaluatiecriteria die meegenomen worden:
 
-Probeer ook een tijdschatting te maken. Hoe lang zal je met elke fase van je onderzoek bezig zijn en wat zijn de concrete \emph{deliverables} in elke fase?
+\begin{itemize}
+	\item \textbf{Detectielatency} (tijd/samples tot alarm) en \textbf{false positive rate} per detector.
+	\item \textbf{Modelimpact}: accuracy-dip (ImageNet-C) en RUL-fout (MAE/RMSE op CMAPSS) voor/na drift.
+	\item \textbf{Attributiestabiliteit}: verschuiving in gemiddelde absolute SHAP/LIME-waarden over tijdvensters.
+	\item \textbf{Rekenkost}: runtime/throughput overhead van detectors en XAI per batch/venster.
+	\item \textbf{PHM/NASA-score}: asymmetrische penaliteitsfunctie voor RUL-fouten, zoals gerapporteerd in \autocite{Saxena2008}.
+\end{itemize}
+
+\subsection{Tijdsplanning}
+
+\begin{itemize}
+	\item \textbf{Week 1-2}: Literatuurstudie en definitieve keuze van driftdetectie- en XAI-technieken.
+	\item \textbf{Week 3-4}: Implementatie van baseline modellen op ImageNet-C en CMAPSS.
+	\item \textbf{Week 5-6}: Integratie van driftdetectie-algoritmen in de modellen.
+	\item \textbf{Week 7-8}: Integratie van XAI-technieken en eerste evaluaties.
+	\item \textbf{Week 9-10}: Uitgebreide experimenten en data-analyse.
+	\item \textbf{Week 11}: Opstellen van rapportage en visualisaties van resultaten.
+	\item \textbf{Week 12}: Finaliseren van het rapport en voorbereiding van de presentatie.
+\end{itemize}
+
+% Hier beschrijf je hoe je van plan bent het onderzoek te voeren. Welke onderzoekstechniek ga je toepassen om elk van je onderzoeksvragen te beantwoorden? Gebruik je hiervoor literatuurstudie, interviews met belanghebbenden (bv.~voor requirements-analyse), experimenten, simulaties, vergelijkende studie, risico-analyse, PoC, \ldots?
+
+% Valt je onderwerp onder één van de typische soorten bachelorproeven die besproken zijn in de lessen Research Methods (bv.\ vergelijkende studie of risico-analyse)? Zorg er dan ook voor dat we duidelijk de verschillende stappen terug vinden die we verwachten in dit soort onderzoek!
+
+% Vermijd onderzoekstechnieken die geen objectieve, meetbare resultaten kunnen opleveren. Enquêtes, bijvoorbeeld, zijn voor een bachelorproef informatica meestal \textbf{niet geschikt}. De antwoorden zijn eerder meningen dan feiten en in de praktijk blijkt het ook bijzonder moeilijk om voldoende respondenten te vinden. Studenten die een enquête willen voeren, hebben meestal ook geen goede definitie van de populatie, waardoor ook niet kan aangetoond worden dat eventuele resultaten representatief zijn.
+
+% Uit dit onderdeel moet duidelijk naar voor komen dat je bachelorproef ook technisch voldoen\-de diepgang zal bevatten. Het zou niet kloppen als een bachelorproef informatica ook door bv.\ een student marketing zou kunnen uitgevoerd worden.
+
+% Je beschrijft ook al welke tools (hardware, software, diensten, \ldots) je denkt hiervoor te gebruiken of te ontwikkelen.
+
+% Probeer ook een tijdschatting te maken. Hoe lang zal je met elke fase van je onderzoek bezig zijn en wat zijn de concrete \emph{deliverables} in elke fase?
 
 %---------- Verwachte resultaten ----------------------------------------------
 \section{Verwacht resultaat, conclusie}%
 \label{sec:verwachte_resultaten}
 
-Hier beschrijf je welke resultaten je verwacht. Als je metingen en simulaties uitvoert, kan je hier al mock-ups maken van de grafieken samen met de verwachte conclusies. Benoem zeker al je assen en de onderdelen van de grafiek die je gaat gebruiken. Dit zorgt ervoor dat je concreet weet welk soort data je moet verzamelen en hoe je die moet meten.
+% Hier beschrijf je welke resultaten je verwacht. Als je metingen en simulaties uitvoert, kan je hier al mock-ups maken van de grafieken samen met de verwachte conclusies. Benoem zeker al je assen en de onderdelen van de grafiek die je gaat gebruiken. Dit zorgt ervoor dat je concreet weet welk soort data je moet verzamelen en hoe je die moet meten.
 
-Wat heeft de doelgroep van je onderzoek aan het resultaat? Op welke manier zorgt jouw bachelorproef voor een meerwaarde?
+% Wat heeft de doelgroep van je onderzoek aan het resultaat? Op welke manier zorgt jouw bachelorproef voor een meerwaarde?
 
-Hier beschrijf je wat je verwacht uit je onderzoek, met de motivatie waarom. Het is \textbf{niet} erg indien uit je onderzoek andere resultaten en conclusies vloeien dan dat je hier beschrijft: het is dan juist interessant om te onderzoeken waarom jouw hypothesen niet overeenkomen met de resultaten.
+% Hier beschrijf je wat je verwacht uit je onderzoek, met de motivatie waarom. Het is \textbf{niet} erg indien uit je onderzoek andere resultaten en conclusies vloeien dan dat je hier beschrijft: het is dan juist interessant om te onderzoeken waarom jouw hypothesen niet overeenkomen met de resultaten.
+
+Dit onderzoek verwacht vooral twee uitkomsten: (1) een kwantitatieve vergelijking van driftdetectie-algoritmen op ImageNet-C en CMAPSS, en (2) een inzichtelijke XAI-analyse die verklaart \textit{waarom} de modellen degraderen. De doelgroep (ML engineers en reliability teams) krijgt hiermee een reproduceerbare aanpak om zowel detectie als diagnose te combineren.
+
+De belangrijkste hypothesen zijn:
+
+\begin{itemize}
+	\item Driftdetectie op basis van prestatie- of statistische testen (DDM/ADWIN/KSWIN/CUSUM) detecteert drift sneller dan baseline run-to-failure monitoring, met een lagere false positive rate op CMAPSS dan op ImageNet-C.
+	\item XAI-metingen (SHAP/LIME) tonen een significante verschuiving in feature- of patch-belang na drift; deze verschuiving correleert met prestatieverlies (accuracy-dip op ImageNet-C, stijgende RUL-fout op CMAPSS).
+	\item Een gecombineerde pipeline (detect \textrightarrow{} explain \textrightarrow{} beslis) verkleint de tijd tot interventie en reduceert onnodige retrains door gerichte alerts.
+\end{itemize}
+
+Verwachte rapportage-elementen:
+
+\begin{itemize}
+	\item \textbf{Detectie-metrics}: latency (aantal samples/epochs tot alarm), false positive rate, true positive rate.
+	\item \textbf{Model-metrics}: top-1 accuracy-dip op ImageNet-C;\ MAE/RMSE voor RUL op CMAPSS voor en na drift.
+	\item \textbf{XAI-metrics}: verschuiving in gemiddelde absolute SHAP-waarden per feature/sensor; stabiliteit van attributions over tijdvensters.
+	\item \textbf{Operationele impact}: aantal triggers naar retrain/human review versus baseline monitoring.
+\end{itemize}
+
+% Mock-up visualisaties (worden vervangen door gegenereerde figuren tijdens de experimenten):
+
+% \begin{figure}[h]
+% 	\centering
+% 	\fbox{\parbox{0.9\linewidth}{\centering Mock-up: detectielatency per detector op ImageNet-C corrupties (lower is beter)}}
+% 	\caption{Verwachte vergelijking van detectielatency tussen DDM, ADWIN, KSWIN en CUSUM op ImageNet-C.}
+% 	\label{fig:latency-imagenet}
+% \end{figure}
+
+% \begin{figure}[h]
+% 	\centering
+% 	\fbox{\parbox{0.9\linewidth}{\centering Mock-up: SHAP-shift voor CMAPSS sensoren voor vs. na drift}}
+% 	\caption{Voorbeeld van feature-attributie verschuiving (SHAP) voor turbofan sensoren, gekoppeld aan stijgende RUL-fout.}
+% 	\label{fig:shap-cmapss}
+% \end{figure}
+
+Samenvattende tabel (indicatieve structuur voor de resultatenrapportage):
+
+\begin{table}[h]
+	\centering
+	\caption{Verwachte rapportage-structuur voor detector- en XAI-resultaten}
+	% \label{tab:expected-results}
+	\small
+	\setlength{\tabcolsep}{4pt}
+	\begin{tabular}{p{0.18\linewidth} p{0.26\linewidth} p{0.17\linewidth} p{0.16\linewidth} p{0.19\linewidth}}
+		\hline
+			extbf{Dataset} & \textbf{Detector/XAI} & \textbf{Latency $\downarrow$} & \textbf{FP-rate $\downarrow$} & \textbf{Attributie-shift} \\
+		\hline
+		ImageNet-C & DDM / ADWIN / KSWIN / CUSUM & \textit{n} samples & \textit{x\%} & Patch-importance verschuift $\uparrow$ \\
+		ImageNet-C & SHAP / LIME & n.v.t. & n.v.t. & Top-k patches \textbf{anders} post-drift \\
+		CMAPSS & DDM / ADWIN / KSWIN / CUSUM & \textit{n} cycles & \textit{x\%} & Sensorbelang verschuift $\uparrow$ \\
+		CMAPSS & SHAP / LIME & n.v.t. & n.v.t. & Top sensoren \textbf{anders} post-drift \\
+		\hline
+	\end{tabular}
+\end{table}
+
+Meerwaarde voor de doelgroep:
+
+\begin{itemize}
+	\item Een reproduceerbare pipeline (detectie + XAI) die sneller en gerichter alarmeert dan enkel prestatiemonitoring.
+	\item Heldere visualisaties voor operators: welke features/patches veranderen en waarom dat wijst op degradatie.
+	\item Richtlijnen wanneer te retrainen, wanneer mens-in-de-loop, en welke detector in welke context best presteert.
+\end{itemize}
 
