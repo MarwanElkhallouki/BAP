@@ -4,9 +4,9 @@
 \label{sec:introduction}
 
 In the last decade, there has been increased usage of AI and ML in diverse sectors such as predictive maintenance and CV.
-This technology provide both boons and challenges, mostly pertaining to the trust of said technology \autocite{Radhakrishnan2020}.
-This makes model-degradation a unacceptable in the current day and age for retaining trust and reliability.
-Model-degradation refers to the phenomenon by which a AI or ML model degrade in performance due to factors such as data-drift, concept-drift, etc. This can cause systems to behave in unexpected manners and decrease trust in the systems, causing companies to drop these systems for more robust alternatives.
+This technology provides both boons and challenges, mostly pertaining to the trust of said technology \autocite{Radhakrishnan2020}.
+This makes model-degradation unacceptable in the current day and age for retaining trust and reliability.
+Model-degradation refers to the phenomenon by which an AI or ML model degrades in performance due to factors such as data-drift, concept-drift, etc. This can cause systems to behave in unexpected ways and decrease trust in the systems, causing companies to drop these systems for more robust alternatives.
 This paper aims to gain a better understanding of how XAI and DD-algorithms can be used in production environments to increase trust and predictability for both users and organizations wishing to use these models.
 
 %---------- State of the art --------------------------------------------------
@@ -14,10 +14,10 @@ This paper aims to gain a better understanding of how XAI and DD-algorithms can 
 \section{Literature review}
 \label{sec:literature}
 
-The current literature describes a multitude of techniques when talking about handling model-degradation.
-This paper will be focusing on two distinct fields namely XAI \autocite{Ribeiro2016} and DD-algorithms \autocite{Bayram2022}.
-Both fields will be studied in the context of turbofan motor degradation for predictive maintenance \autocite{Saxena2008}.
-Finally these pipelines will be evaluated as a complementary point against simulated covariant shift of images \autocite{Hendrycks2019} to check if the same techniques can be applied for other application not pertaining to predictive maintenance with the use of sensors.
+The current literature describes a multitude of techniques for handling model-degradation.
+This paper focuses on two distinct fields namely XAI \autocite{Ribeiro2016} and DD-algorithms \autocite{Bayram2022}.
+Both fields are studied in the context of turbofan motor degradation for predictive maintenance \autocite{Saxena2008}.
+Finally these pipelines are evaluated as a complementary test against simulated covariate shift of images \autocite{Hendrycks2019} to check if the same techniques are applicable for other application not pertaining to predictive maintenance with the use of sensors.
 
 \subsection{Research questions}
 The central research question is:
@@ -27,29 +27,29 @@ The central research question is:
 
 Supporting questions:
 \begin{itemize}
-  \item How does model-degradation in turbofan-predictive-maintenance manifest in real world applications?
-  \item Which Drift-detection- and Explainable-AI-techniques are most accurate at timely detection of operational drift and model-degradation?
+  \item How does model-degradation in turbofan predictive maintenance manifest in real world applications?
+  \item Which Drift-detection- and Explainable AI-techniques are most accurate at timely detection of operational drift and model-degradation?
   \item To what extent can the found methods be used when detecting and explaining operational drift, model-degradation and image corruption?
-  \item How do the found methods relate to each other in detections speed, accuracy and explainability?
+  \item How do the found methods relate to each other in detection speed, accuracy and explainability?
 \end{itemize}
 
 \subsection{Datasets}
-For this research, the following two datasets will be used: CMAPSS (NASA) \autocite{Saxena2008} and ImageNet-C \autocite{Hendrycks2019}.
+For this research, the following two datasets are used: CMAPSS (NASA) \autocite{Saxena2008} and ImageNet-C \autocite{Hendrycks2019}.
 CMAPSS (NASA) is a dataset made by NASA simulating gradual failure in turbofan engines, commonly used for testing models in predictive maintenance.
-The dataset contains four sub-datasets each showing failure in different manners, severity and speed.
-ImageNet-C is a dataset comprised of images and their corrupted counterparts.
+The dataset contains four sub-datasets each showing failure in different ways, severity and speed.
+ImageNet-C is a dataset consisting of images and their corrupted counterparts.
 The corruptions contained mimic real world image or camera corruptions such as frost, sensor degradation, fog, etc.
-These corrupted images will be slowly introduced as to mimic a time-bound degradation.
+These corrupted images are slowly introduced to mimic a time-bound degradation.
 
 \subsection{Types of drift}
-There are differing types of drift that may occur in real world applications such as Covariant drift, label drift and concept drift \autocite{Bayram2022}.
-Covariant drift is a change in input data distribution, whereas label drift is a change in the output labels.
+There are differing types of drift that may occur in real world applications such as Covariate drift, label drift and concept drift \autocite{Bayram2022}.
+Covariate drift is a change in input data distribution, whereas label drift is a change in the output labels.
 Concept drift is characterized by both a change in input data distribution as well as the output labels.
-Each of these types will contribute to the final conclusion and will therefore have to be thoroughly explored before drawing any conclusion.
+Each of these types contribute to the final conclusion and have to be thoroughly explored before drawing any conclusion.
 
 
 \subsection{Drift-detection algorithms}
-Algorithms such as MDDM \autocite{Pesaranghader2017} and EDDM \autocite{baena2006early} are both designed to detect a change in data-distribution leading to model-degradation. Both are made to give real-time signals when a discrepancy between the aparent results and the expected results are shown to be significant.
+Algorithms such as MDDM \autocite{Pesaranghader2017} and EDDM \autocite{baena2006early} are both designed to detect a change in data-distribution leading to model-degradation. Both are made to give real-time signals when a discrepancy between the apparent results and the expected results are shown to be significant.
 More DD-algorithms will be explored in this paper.
 \subsection{Drift-detection categories}
 There are fundamentally different categories of DD-algorithms that reside under concept-drift \autocite{Bayram2022}:
@@ -59,11 +59,11 @@ There are fundamentally different categories of DD-algorithms that reside under 
         \item Multiple hypothesis-based detection
         \item Contextual-based detection
 \end{itemize}
-This paper will limit it's scope to the first three.
+This paper will limit its scope to the first three.
 
 \subsection{XAI techniques}
-XAI-techniques like LIME \autocite{garreau2020explaining} and SHAP \autocite{VandenBroeck2022} are designed to give insight into the decision-making-process of AI-models. These techniques can help to identify the cause of model-degradation by analyzing which features contribute most to the predictions.
-These have been shown to significantly help with increasing accuracy of domain experts in explaining otherwise difficult to explain models.
+XAI-techniques like LIME \autocite{garreau2020explaining} and SHAP \autocite{VandenBroeck2022} are designed to give insight into the decision-making process of AI-models. These techniques can help to identify the cause of model-degradation by analyzing which features contribute most to the predictions.
+These have been shown to significantly help domain experts interpret otherwise hard-to-explain models.
 
 %---------- Methodology -------------------------------------------------------
 
@@ -71,20 +71,21 @@ These have been shown to significantly help with increasing accuracy of domain e
 \label{sec:methodology}
 
 \subsection{Model selection}
-By using separate datasets for predictive maintenance and image corruption, both will get respectively relevant AI-models:
+By using separate datasets for predictive maintenance and image corruption, both get respectively relevant AI-models:
 \begin{itemize}
         \item Predictive maintenance --- Recurrent Neural Networks (RNN)
         \item CV --- Convolutional Neural Networks (CNN)
 \end{itemize}
 
 \subsection{Implementation}
-We will compare several DD-algorithms (MDDM, EDDM, ADWIN/KSWIN, CUSUM, etc.). Detectors will be applied either on model performance metrics (error rates, RUL error) or on raw/embedded data distributions depending on the method.
+When comparing several DD-algorithms (MDDM, EDDM, ADWIN/KSWIN, CUSUM, etc.), detectors are applied to model performance metrics (error rates, RUL error) or on raw/embedded data distributions depending on the method.
 
 \subsection{Integration of XAI techniques}
-When a detector flags a window, we will compute XAI attributions (SHAP, LIME, saliency maps) aggregated over pre- and post-drift windows. The comparison highlights which features/time-windows changed importance.
+When a detector flags a window, the XAI attributions (SHAP, LIME, saliency maps) are aggregated over pre- and post-drift windows.
+The comparison highlights which features/time-windows changed in importance.
 
 \subsection{Evaluation}
-We will evaluate detectors and explanations using the following criteria:
+The detectors and explanations are evaluated using the following criteria:
 \begin{itemize}
   \item \textbf{Detection latency}: samples/steps until alarm and false positive rate for each detector.
   \item \textbf{Model impact}: accuracy drop on ImageNet-C and MAE/RMSE for RUL on CMAPSS before/after drift.
@@ -109,13 +110,13 @@ We will evaluate detectors and explanations using the following criteria:
 \section{Expected results and conclusion}
 \label{sec:expected_results}
 
-We expect two main outcomes: (1) a quantitative comparison of detectors on ImageNet-C and CMAPSS; and (2) an XAI-driven analysis explaining \textit{why} models degrade. The target audience (ML engineers and reliability teams) should obtain a reproducible pipeline combining detection and diagnosis.
+Two main outcomes are expected: (1) a quantitative comparison of detectors on ImageNet-C and CMAPSS; and (2) an XAI-driven analysis explaining \textit{why} models degrade. The target audience (ML engineers and reliability teams) should obtain a reproducible pipeline combining detection and diagnosis.
 
 Hypotheses:
 \begin{itemize}
-  \item Performance- or statistic-based detectors (DDM/ADWIN/KSWIN/CUSUM) will detect drift faster than naive run-to-failure monitoring and will show lower false positive rates on CMAPSS than on ImageNet-C.
-  \item XAI measures (SHAP/LIME) will reveal significant shifts in feature/patch importance after drift; these shifts will correlate with performance degradation.
-  \item A combined pipeline (detect - explain - decide) will reduce time-to-intervention and unnecessary retraining by producing targeted alerts.
+  \item Performance-based or statistical detectors (DDM/ADWIN/KSWIN/CUSUM) detect drift faster than naive run-to-failure monitoring and show lower false positive rates on CMAPSS than on ImageNet-C.
+  \item XAI measures (SHAP/LIME) reveal significant shifts in feature/patch importance after drift; these shifts correlate with performance degradation.
+  \item A combined pipeline (detect - explain - decide) reduces time-to-intervention and unnecessary retraining by producing targeted alerts.
 \end{itemize}
 
 Reporting elements:
