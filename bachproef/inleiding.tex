@@ -1,50 +1,54 @@
 %%=============================================================================
-%% Inleiding
+%% Introduction
 %%=============================================================================
 
-\chapter{\IfLanguageName{dutch}{Inleiding}{Introduction}}%
+\chapter{Introduction}%
 \label{ch:inleiding}
 
-De inleiding moet de lezer net genoeg informatie verschaffen om het onderwerp te begrijpen en in te zien waarom de onderzoeksvraag de moeite waard is om te onderzoeken. In de inleiding ga je literatuurverwijzingen beperken, zodat de tekst vlot leesbaar blijft. Je kan de inleiding verder onderverdelen in secties als dit de tekst verduidelijkt. Zaken die aan bod kunnen komen in de inleiding~\autocite{Pollefliet2011}:
+This thesis looks at two problems that have started to get more attention in teh machine learning field: drift detection and explainable AI. Both are relevant to industrial inspection systems where a CNN classifies images from a camera on a production line. The model works fine at first, but over time things change, the camera degrades, lighting shifts, new defect types appear. Performance drops. The problem is that nobody notices until it's too late.
 
-\begin{itemize}
-  \item context, achtergrond
-  \item afbakenen van het onderwerp
-  \item verantwoording van het onderwerp, methodologie
-  \item probleemstelling
-  \item onderzoeksdoelstelling
-  \item onderzoeksvraag
-  \item \ldots
-\end{itemize}
+Drift detection is about figuring out \textit{when} a model's performance has changed. Explainable AI asks \textit{why} the model behaves the way it does. Together they can give engineers not just an alarm, but an explanation of what changed. That combination is what I'm trying to build in this thesis.
 
-\section{\IfLanguageName{dutch}{Probleemstelling}{Problem Statement}}%
+\section{Problem Statement}%
 \label{sec:probleemstelling}
 
-Uit je probleemstelling moet duidelijk zijn dat je onderzoek een meerwaarde heeft voor een concrete doelgroep. De doelgroep moet goed gedefinieerd en afgelijnd zijn. Doelgroepen als ``bedrijven,'' ``KMO's'', systeembeheerders, enz.~zijn nog te vaag. Als je een lijstje kan maken van de personen/organisaties die een meerwaarde zullen vinden in deze bachelorproef (dit is eigenlijk je steekproefkader), dan is dat een indicatie dat de doelgroep goed gedefinieerd is. Dit kan een enkel bedrijf zijn of zelfs één persoon (je co-promotor/opdrachtgever).
+Deep learning has been adopted widely in manufacturing, automated visual inspection is used in electronics, food processing, automotive, and more. But teh deployment pattern is almost always the same: train once, validate, deploy, and forget. \textcite{Radhakrishnan2020} point out that this lack of post-deployment monitoring is one of the main reasons organisations struggle to trust AI systems.
 
-\section{\IfLanguageName{dutch}{Onderzoeksvraag}{Research question}}%
+The specific problem is that there's no practical pipeline that both detects model degradation in image inspection systems and explains what's going on to the engineers who need to fix it. Just watching accuracy is slow and uninformative. It tells you something went wrong. It doesn't tell you where to look.
+
+The audience for this work is ML engineers and reliability teams working with visual inspection in manufacturing. These people know model architectures and deployment. What they often lack is actionable diagnostics, something more specific form a dropped accuracy score.
+
+\section{Research Question}%
 \label{sec:onderzoeksvraag}
 
-Wees zo concreet mogelijk bij het formuleren van je onderzoeksvraag. Een onderzoeksvraag is trouwens iets waar nog niemand op dit moment een antwoord heeft (voor zover je kan nagaan). Het opzoeken van bestaande informatie (bv. ``welke tools bestaan er voor deze toepassing?'') is dus geen onderzoeksvraag. Je kan de onderzoeksvraag verder specifiëren in deelvragen. Bv.~als je onderzoek gaat over performantiemetingen, dan 
+The central research question is:
 
-\section{\IfLanguageName{dutch}{Onderzoeksdoelstelling}{Research objective}}%
+\begin{quote}
+\textit{How can drift-detection algorithms and XAI techniques be combined into a practical pipeline for timely detection and explanation of model degradation in industrial visual inspection, and to what extent are these techniques effective at identifying covariate drift and image corruption?}
+\end{quote}
+
+This breaks down into several more specific questions:
+
+\begin{itemize}
+  \item How does model degradation manifest in CNN-based industrial defect detection?
+  \item Which drift-detection algorithms offer the best trade-off between detection latency and false positive rate for image classification pipelines?
+  \item Which XAI methods produce the most actionable explanations when a drift event is detected?
+  \item Do the findings generalise beyond industrial inspection to other image-domain scenarios?
+\end{itemize}
+
+\section{Research Objective}%
 \label{sec:onderzoeksdoelstelling}
 
-Wat is het beoogde resultaat van je bachelorproef? Wat zijn de criteria voor succes? Beschrijf die zo concreet mogelijk. Gaat het bv.\ om een proof-of-concept, een prototype, een verslag met aanbevelingen, een vergelijkende studie, enz.
+The output of this thesis is a reproducible pipeline implemented in Python that integrates a trained CNN with drift detectors and XAI methods. Two datasets are used: the MVTec Anomaly Detection Dataset~\autocite{Bergmann2019} as the main case, and ImageNet-C~\autocite{Hendrycks2019} as a secondary validation for camera degradation scenarios.
 
-\section{\IfLanguageName{dutch}{Opzet van deze bachelorproef}{Structure of this bachelor thesis}}%
+Success means three things. At least one drift detector should catch degradation earlier than a simple accuracy threshold. XAI attributions should shift meaningfully around detected drift events. And the pipeline should give practitioners information to distinguish between different causes of degradation without manual image review.
+
+\section{Structure of This Thesis}%
 \label{sec:opzet-bachelorproef}
 
-% Het is gebruikelijk aan het einde van de inleiding een overzicht te
-% geven van de opbouw van de rest van de tekst. Deze sectie bevat al een aanzet
-% die je kan aanvullen/aanpassen in functie van je eigen tekst.
+The remainder of this thesis is structured as follows.
 
-De rest van deze bachelorproef is als volgt opgebouwd:
+Chapter~\ref{ch:stand-van-zaken} reviews the literature, concept drift, drift detection algorithms, XAI for image models, and the datasets used.
 
-In Hoofdstuk~\ref{ch:stand-van-zaken} wordt een overzicht gegeven van de stand van zaken binnen het onderzoeksdomein, op basis van een literatuurstudie.
+Chapter~\ref{ch:methodologie} describes the experimental pipeline, models, drift simulation, and how detectors and XAI methods are integrated.
 
-In Hoofdstuk~\ref{ch:methodologie} wordt de methodologie toegelicht en worden de gebruikte onderzoekstechnieken besproken om een antwoord te kunnen formuleren op de onderzoeksvragen.
-
-% TODO: Vul hier aan voor je eigen hoofstukken, één of twee zinnen per hoofdstuk
-
-In Hoofdstuk~\ref{ch:conclusie}, tenslotte, wordt de conclusie gegeven en een antwoord geformuleerd op de onderzoeksvragen. Daarbij wordt ook een aanzet gegeven voor toekomstig onderzoek binnen dit domein.
