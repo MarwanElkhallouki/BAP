@@ -136,3 +136,8 @@ output/
 out/
 
 .github/
+
+CLAUDE.md
+
+# Editor files
+**/.auctex-auto/
