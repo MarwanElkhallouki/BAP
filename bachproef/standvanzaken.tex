@@ -1,51 +1,137 @@
-\chapter{\IfLanguageName{dutch}{Stand van zaken}{State of the art}}%
+%%=============================================================================
+%% State of the Art
+%%=============================================================================
+
+\chapter{State of the Art}%
 \label{ch:stand-van-zaken}
 
-% Tip: Begin elk hoofdstuk met een paragraaf inleiding die beschrijft hoe
-% dit hoofdstuk past binnen het geheel van de bachelorproef. Geef in het
-% bijzonder aan wat de link is met het vorige en volgende hoofdstuk.
+This chapter goes over the main concepts behind drift and XAI that are relevant to this thesis. It covers model degradation, the different types of drift, the four detection algorithms used, the three XAI methods applied, and the two datasets. The goal is to provide enough background to understand the choices made in Chapter~\ref{ch:methodologie}.
 
-% Pas na deze inleidende paragraaf komt de eerste sectiehoofding.
+%%============================================================================
+\section{Model Degradation and the Drift Problem}\label{sec:modeldegradation}
 
-Dit hoofdstuk bevat je literatuurstudie. De inhoud gaat verder op de inleiding, maar zal het onderwerp van de bachelorproef *diepgaand* uitspitten. De bedoeling is dat de lezer na lezing van dit hoofdstuk helemaal op de hoogte is van de huidige stand van zaken (state-of-the-art) in het onderzoeksdomein. Iemand die niet vertrouwd is met het onderwerp, weet nu voldoende om de rest van het verhaal te kunnen volgen, zonder dat die er nog andere informatie moet over opzoeken \autocite{Pollefliet2011}.
+A machine learning model is trained on data from a particular distribution. When that distribution changes, performance drops. This is called dataset shift, distributional shift, or more generally concept drift~\autocite{Bayram2022}.
 
-Je verwijst bij elke bewering die je doet, vakterm die je introduceert, enz.\ naar je bronnen. In \LaTeX{} kan dat met het commando \texttt{$\backslash${textcite\{\}}} of \texttt{$\backslash${autocite\{\}}}. Als argument van het commando geef je de ``sleutel'' van een ``record'' in een bibliografische databank in het Bib\LaTeX{}-formaat (een tekstbestand). Als je expliciet naar de auteur verwijst in de zin (narratieve referentie), gebruik je \texttt{$\backslash${}textcite\{\}}. Soms is de auteursnaam niet expliciet een onderdeel van de zin, dan gebruik je \texttt{$\backslash${}autocite\{\}} (referentie tussen haakjes). Dit gebruik je bv.~bij een citaat, of om in het bijschrift van een overgenomen afbeelding, broncode, tabel, enz. te verwijzen naar de bron. In de volgende paragraaf een voorbeeld van elk.
+\textcite{Bayram2022} give a good overview of this area in their review published in \textit{Knowledge-Based Systems}. They cover both the theory and the practical detection methods that exist.
 
-\textcite{Knuth1998} schreef een van de standaardwerken over sorteer- en zoekalgoritmen. Experten zijn het erover eens dat cloud computing een interessante opportuniteit vormen, zowel voor gebruikers als voor dienstverleners op vlak van informatietechnologie~\autocite{Creeger2009}.
+The consequences of missing degradation depend on the application. For a recommender system a slow drop in accuracy might not matter for weeks. For industrial visual inspection it matters right away. A defect classifier that starts missing cracks, or flagging good products as defective, has immediate consequences. Production stops, or defects get through to customers. \textcite{Radhakrishnan2020} point out that lack of post-deployment monitoring is one of teh main reasons AI adoption stalls in organisations.
 
-Let er ook op: het \texttt{cite}-commando voor de punt, dus binnen de zin. Je verwijst meteen naar een bron in de eerste zin die erop gebaseerd is, dus niet pas op het einde van een paragraaf.
+\subsection{Types of Drift}
 
-\begin{figure}
+It helps to distinguish between the main drift types because each one implies a different detection strategy~\autocite{Bayram2022}.
+
+\textbf{Covariate shift} occures when the input distribution $P(X)$ changes but the conditional distribution $P(Y|X)$ stays stable. In visual inspection this is common: the camera lens gets dusty, lighting changes, or a new batch has slightly different surface texture.
+
+\textbf{Label shift} means $P(Y)$ changes without a change in $P(X|Y)$. This happens when the proportion of defective products changes, for example when a new supplier introduces more defects. The model's decision boundaries may still be correct but predictions become biased.
+
+\textbf{Concept drift} is the hardest case: both $P(X)$ and $P(Y|X)$ change. A new defect type that looks nothing like the training data is an example. The model simply cannot classify these correctly.
+
+The literature also distinguishes between sudden drift, gradual drift, and recurring drift~\autocite{Gama2014}. Each one presents different challenges for detection.
+
+%%============================================================================
+\section{Drift Detection Algorithms}
+\label{sec:driftdetection}
+
+Four algorithms are used in this thesis. Each one represents a different approach to the problem.
+
+\subsection{DDM, Drift Detection Method}
+
+DDM was proposed by \textcite{Gama2004} and is one of the oldest methods. It monitors the running error rate of a classifier and uses statistical bounds to separate normal variation from a real shift. It tracks $p_i$ (the running error rate) and $s_i$ (the standard deviation), based on a binomial model. When $p_i + s_i$ reaches the warning threshold, the detector enters a warning state. When it reaches the drift threshold, an alarm fires.
+
+DDM is cheap to compute and easy to plug into any classification pipeline. The main limitation is that it needs labelled data at inference time.
+
+\subsection{EDDM, Early Drift Detection Method}
+
+EDDM~\autocite{baena2006early} extends DDM by looking at the distance between consecutive errors instead of the cumulative error rate. Under stable conditions errors are spread out roughly evenly. When drift starts, errors cluster together. EDDM can pick this up earlier than DDM.
+
+For visual inspection where drift is often gradual this is useful. The downside is a higher false positive rate when things are stable.
+
+\subsection{ADWIN, Adaptive Windowing}
+
+ADWIN~\autocite{Bifet2007} works differently. It keeps an adaptive sliding window and tests whether any sub-window has a significantly different mean from the rest. When it finds one, it raises an alarm and shrinks the window to remove the pre-drift data.
+
+The key advantage is that you don't need to specify a window size in advance. \textcite{Bayram2022} say ADWIN tends to have low detection latency. The cost is more computation than DDM or EDDM.
+
+\subsection{MDDM, McDiarmid Drift Detection Method}
+
+MDDM~\autocite{Pesaranghader2017} uses McDiarmid's inequality to bound the deviation of a weighted window mean from its maximum value. More recent predictions get higher weights. This makes it more responsive to recent changes while staying tolerant of isolated outliers. Empirical comparisons show it has shorter detection delays and lower false negative rates than several competing methods~\autocite{Pesaranghader2017}.
+
+\subsection{Summary and Selection Rationale}
+
+Table~\ref{tab:detectors} gives an overview. All four methods monitor classifier error rates, so labelled data must be available. In this experiment labels arrive with a one-batch delay.
+
+\begin{table}[h]
   \centering
-  \includegraphics[width=0.8\textwidth]{grail.jpg}
-  \caption[Voorbeeld figuur.]{\label{fig:grail}Voorbeeld van invoegen van een figuur. Zorg altijd voor een uitgebreid bijschrift dat de figuur volledig beschrijft zonder in de tekst te moeten gaan zoeken. Vergeet ook je bronvermelding niet!}
-\end{figure}
-
-\begin{listing}
-  \begin{minted}{python}
-    import pandas as pd
-    import seaborn as sns
-
-    penguins = sns.load_dataset('penguins')
-    sns.relplot(data=penguins, x="flipper_length_mm", y="bill_length_mm", hue="species")
-  \end{minted}
-  \caption[Voorbeeld codefragment]{Voorbeeld van het invoegen van een codefragment.}
-\end{listing}
-
-\lipsum[7-20]
-
-\begin{table}
-  \centering
-  \begin{tabular}{lcr}
+  \caption[Drift detectors compared]{Overview of drift detection algorithms used in this study.}
+  \label{tab:detectors}
+  \small
+  \begin{tabular}{lllll}
     \toprule
-    \textbf{Kolom 1} & \textbf{Kolom 2} & \textbf{Kolom 3} \\
-    $\alpha$         & $\beta$          & $\gamma$         \\
+    \textbf{Method} & \textbf{Mechanism} & \textbf{Latency} & \textbf{FPR} & \textbf{Complexity} \\
     \midrule
-    A                & 10.230           & a                \\
-    B                & 45.678           & b                \\
-    C                & 99.987           & c                \\
+    DDM   & Error rate bounds        & Moderate & Low    & $O(1)$ per step \\
+    EDDM  & Inter-error distance     & Low      & Medium & $O(1)$ per step \\
+    ADWIN & Adaptive window test     & Very low & Medium & $O(\log n)$ per step \\
+    MDDM  & Weighted window mean     & Low      & Low    & $O(w)$ per step \\
     \bottomrule
   \end{tabular}
-  \caption[Voorbeeld tabel]{\label{tab:example}Voorbeeld van een tabel.}
 \end{table}
+
+%%============================================================================
+\section{Explainable AI for Image Models}
+\label{sec:xai}
+
+Once a drift alarm fires, the next question is: what changed and where? This is where XAI comes in. Three methods are applied: LIME, SHAP, and Grad-CAM. They work at different levels of granularity.
+
+\subsection{LIME, Local Interpretable Model-Agnostic Explanations}
+
+LIME was introduced by \textcite{Ribeiro2016} in ``Why Should I Trust You?''. For images, it works by segmenting the image into superpixels, replacing subsets of them with a neutral colour, and watching how the output changes. A linear model is then fit to these perturbations to get importance weights for each superpixel.
+
+LIME is model-agnostic which is useful. The downside is instability, because it uses random sampling, results can vary between runs. \textcite{garreau2020explaining} look at this convergence problem in detail.
+
+In the drift context, LIME is applied to samples before and after an alarm. A shift in which superpixels contribute most is a sign the model has changed what it's looking at.
+
+\subsection{SHAP, SHapley Additive exPlanations}
+
+\textcite{Lundberg2017} proposed SHAP based on cooperative game theory. Each feature (or superpixel for images) gets a Shapley value representing its average marginal contribution across all possible subsets of features. The attributions satisfy useful axiomatic properties: efficiency, symmetry, and the dummy axiom. \textcite{VandenBroeck2022} look at when these computations stay tractable.
+
+In practice, KernelSHAP is used for image models. It approximates Shapley values through sampling. Within the drift pipeline, SHAP values are pooled across a window of samples. A shift in mean absolute SHAP values between the pre-drift and post-drift windows indicates the model has started relying on different features.
+
+\subsection{Grad-CAM, Gradient-weighted Class Activation Mapping}
+
+Grad-CAM~\autocite{Selvaraju2019} takes a different approach. It doesn't perturb the input at all. Instead it computes the gradients of the target class score with respect to the activations of the final convolutional layer. These gradients are pooled to get class-discriminative weights, which are combined with the feature maps to produce a heatmap.
+
+For visual inspection this is practical: you can overlay the heatmap directly on the image. If the model starts looking at the wrong regions after drift, you can see it directly. No statistical machinery needed.
+
+The limitation is that Grad-CAM needs gradient access, so it doesn't work with black-box models. Since ResNet-50 is used here, this is not a problem.
+
+%%============================================================================
+\section{Datasets}
+\label{sec:datasets}
+
+\subsection{MVTec Anomaly Detection Dataset}
+
+MVTec AD was introduced by \textcite{Bergmann2019} at CVPR 2019 and is now the standard benchmark for industrial anomaly detection. It has fifteen categories (five texture, ten object), 5354 images total. Training splits contain only normal images. Test splits mix normal and defective images, with pixel-level ground truth masks for each defective image.
+
+This thesis uses five categories: carpet, bottle, metal\_nut, transistor, and leather. The dataset is used in a supervised binary classification framing rather than the standard unsupervised one. Two defect types per category are included in the training split, and both normal and defective images are used in the test phase.
+
+\subsection{ImageNet-C}
+
+ImageNet-C was introduced by \textcite{Hendrycks2019}. It applies fifteen corruption types to the ImageNet validation set at five severity levels. Corruptions cover noise, blur, weather effects, and digital distortions.
+
+Here it serves as secondary validation. The same drift detectors are applied to a pre-trained ResNet-50 running on ImageNet-C, which lets us compare detector behaviour between an industrial inspection scenario and a more general camera degradation scenario.
+
+%%============================================================================
+\section{Related Work}
+\label{sec:relatedwork}
+
+The combination of drift detection and XAI for image models is fairly new. There are not many direct comparisons in the literature.
+
+\textcite{Bayram2022} give the best recent review of drift detection. Their taxonomy separates methods that monitor raw data distributions from those that track model performance metrics. This thesis uses the latter approach.
+
+\textcite{Selvaraju2019} show how Grad-CAM can diagnose model failures, including cases where a model has learned to attend to background features. This supports using attention patterns as a diagnostic signal alongside accuracy.
+
+\textcite{Hendrycks2019} show that standard deep learning models can degrade dramatically on ImageNet-C corruptions, often from severity 3 or 4 onwards. This makes early detection valuable.
+
+MVTec AD has mostly been used for unsupervised anomaly detection~\autocite{Bergmann2019}. The supervised framing here makes the drift simulation more controlled. As far as I can tell, combining MVTec AD with drift detectors and XAI in a unified pipeline has not been done before in peer-reviewed work.
 
