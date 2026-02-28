@@ -2,47 +2,15 @@
 %% Samenvatting
 %%=============================================================================
 
-% TODO: De "abstract" of samenvatting is een kernachtige (~ 1 blz. voor een
-% thesis) synthese van het document.
-%
-% Een goede abstract biedt een kernachtig antwoord op volgende vragen:
-%
-% 1. Waarover gaat de bachelorproef?
-% 2. Waarom heb je er over geschreven?
-% 3. Hoe heb je het onderzoek uitgevoerd?
-% 4. Wat waren de resultaten? Wat blijkt uit je onderzoek?
-% 5. Wat betekenen je resultaten? Wat is de relevantie voor het werkveld?
-%
-% Daarom bestaat een abstract uit volgende componenten:
-%
-% - inleiding + kaderen thema
-% - probleemstelling
-% - (centrale) onderzoeksvraag
-% - onderzoeksdoelstelling
-% - methodologie
-% - resultaten (beperk tot de belangrijkste, relevant voor de onderzoeksvraag)
-% - conclusies, aanbevelingen, beperkingen
-%
-% LET OP! Een samenvatting is GEEN voorwoord!
+\chapter*{Abstract}
 
-%%---------- Nederlandse samenvatting -----------------------------------------
-%
-% TODO: Als je je bachelorproef in het Engels schrijft, moet je eerst een
-% Nederlandse samenvatting invoegen. Haal daarvoor onderstaande code uit
-% commentaar.
-% Wie zijn bachelorproef in het Nederlands schrijft, kan dit negeren, de inhoud
-% wordt niet in het document ingevoegd.
+Machine learning models degrade over time when the data they receive in production shifts away from what they were trained on. This is called model degradation or concept drift. In industrial visual inspection this is a real problem: cameras age, lighting changes, new defect types appear. The model keeps running but makes more and more mistakes.
 
-\IfLanguageName{english}{%
-\selectlanguage{dutch}
-\chapter*{Samenvatting}
-\lipsum[1-4]
-\selectlanguage{english}
-}{}
+This thesis looks at whether drift detection algorithms and Explainable AI methods can be combined to catch degradation early and explain what changed. The main dataset is MVTec Anomaly Detection Dataset, a benchmark for industrial visual inspection. ImageNet-C is used as a secondary dataset to simulate camera and sensor degradation through controlled image corruptions at five severity levels.
 
-%%---------- Samenvatting -----------------------------------------------------
-% De samenvatting in de hoofdtaal van het document
+The experiment has three main parts. First, a ResNet-50 is fine-tuned as a binary defect classifier on MVTec AD. Then four drift detectors, DDM, EDDM, ADWIN, and MDDM, are added to the inference pipeline to monitor the error distribution. Finally, XAI methods (LIME, SHAP, and Grad-CAM) are applied around detected drift events to see what visual features changed.
 
-\chapter*{\IfLanguageName{dutch}{Samenvatting}{Abstract}}
+The results show a few clear things. ADWIN is the fastest detector. EDDM had the fewest false alarms. Grad-CAM is the most immediately useful for seeing how the model's attention shifts, while SHAP gives a more quantifiable view of attribution change. The combined pipeline catches degradation earlier than a simple accuracy monitor, which is pretty much what you'd want from a monitoring pipeline.
 
-\lipsum[1-4]
+The main contribution is a reproducible pipeline and some practical guidelines for ML engineers working with visual inspection in production.
+
