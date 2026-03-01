@@ -21,7 +21,10 @@ fi
 ${container_cmd} build --tag bpimg \
   --file docker/Dockerfile .
 
-# build the thesis
+# build the thesis — defaults to 'bachproef', pass a dir name to override
+# e.g.  ./make_thesis.sh bachproef_extra
+readonly target_dir="${1:-bachproef}"
+
 ${container_cmd} run --rm \
   --volume "$PWD":/bp"${mount_opts}" bpimg \
-  sh /bp/docker/render_thesis.sh bachproef
+  sh /bp/docker/render_thesis.sh "${target_dir}"

@@ -1,0 +1,15 @@
+%%=============================================================================
+%% Samenvatting
+%%=============================================================================
+
+\chapter*{Abstract}
+
+Deep learning models deployed in industrial visual inspection are expected to maintain stable performance across months or years of continuous operation. In practice, one of the most pervasive, and least discussed, causes of degradation is not a change in what the model is supposed to detect, but a change in the quality of the images it receives. Camera lenses accumulate dust and scratches. Sensors age. Transmission pipelines introduce compression artefacts. Ambient lighting drifts. All of these are forms of covariate shift: the appearance of input images changes without touching the underlying relationship between visual features and defect status.
+
+This thesis investigates a deliberately simplified and controlled version of that problem. A standard ResNet-50, carrying only its ImageNet pre-training weights and no fine-tuning whatsoever for the target domain, is run against a stream of images drawn from the MVTec Anomaly Detection Dataset. Corruptions from the ImageNet-C benchmark, Gaussian noise, defocus blur, brightness shift, and JPEG compression artefacts, each applied across five severity levels, are introduced progressively into that image stream, simulating the kind of incremental sensor degradation that accumulates in a real installation. The core question is whether this corruption-induced covariate drift is detectable by standard drift-detection algorithms, and whether XAI methods can subsequently characterise what changed in the model's behaviour.
+
+Four drift detectors are evaluated: DDM, EDDM, ADWIN, and MDDM. They monitor a prediction-consistency signal derived by comparing each image's predicted class under clean conditions with its predicted class under progressively increasing corruption. When a detector raises an alarm, three XAI methods, Grad-CAM, KernelSHAP, and LIME, are applied to windows of images immediately before and after the detected event to identify which visual regions were most affected.
+
+The results support the central hypothesis. All four detectors identify corruption-induced drift, though with meaningfully different latencies and false-positive rates. ADWIN responds fastest; EDDM is most conservative. Grad-CAM change maps make the corruption's spatial footprint immediately visible, while SHAP provides a more quantitative account of the attribution shift. The findings hold consistently across corruption types and severity levels, suggesting that corruption-driven covariate shift is reliably detectable even when the model has no domain-specific training.
+
+The primary contribution is a minimal, reproducible pipeline for corruption drift detection in image streams, together with an analysis of how XAI methods can characterise the nature of that drift, without requiring ground-truth labels or domain-specific model adaptation.

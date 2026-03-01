@@ -1,0 +1,61 @@
+%%=============================================================================
+%% Introduction
+%%=============================================================================
+
+\chapter{Introduction}%
+\label{ch:inleiding}
+
+Industrial visual inspection pipelines depend on stable image quality in ways that are easy to overlook during development. A model is trained on a curated dataset, validated on a held-out test split drawn from the same distribution, and deployed in an environment that is rarely as clean as the data it was built on. Cameras are mounted once and then left alone. Lenses accumulate dust. Sensors degrade. Illumination conditions shift across seasons. Compressed video feeds introduce artefacts. None of these changes alter the factory's products or the defect types the model must find, but they alter every image the model sees. The model's training distribution and its deployment distribution diverge, quietly, without any obvious announcement.
+
+This kind of shift, a change in the statistical properties of the input images without any change in the underlying task, is what the machine learning literature calls covariate drift. It is arguably the most common form of distribution shift in real-world vision pipelines, and one of the least operationally managed. Most deployed systems have no mechanism for detecting it.
+
+This thesis examines that gap from a deliberately controlled angle. Rather than studying the full complexity of model degradation in production, which involves new defect types, changes in product specifications, and operational disruptions of all kinds, it isolates a single question: can image corruption alone, applied progressively to an otherwise unchanged dataset, be detected and characterised using standard drift-detection and XAI tools?
+
+\section{Problem Statement}%
+\label{sec:probleemstelling}
+
+Monitoring deployed AI systems for performance degradation has become a recognised challenge across the machine learning community, but operational practice is still catching up to the theoretical frameworks. The dominant monitoring approach, watch the accuracy, raise an alarm when it drops below some threshold, is slow, labour-intensive, and almost never informative about the root cause. It tells you that something has gone wrong. It does not tell you what changed, or where to look.
+
+In image-based inspection, the root cause is often not a fundamental shift in the target distribution but a much more mundane technical failure: a camera gradually going out of focus, a lighting rig with a dying bulb, an image processing pipeline that starts dropping bits. These are fixable problems, if they can be identified. Without automated diagnostic tools, they tend to persist far longer than they should.
+
+The specific problem this thesis addresses is the following: given a model that has not been adapted to its deployment domain at all, carrying only its ImageNet pre-training, and given a stream of images subject to progressively worsening image-quality corruption, can standard drift-detection algorithms identify when the corruption becomes operationally meaningful, and can XAI methods explain what changed in the model's behaviour?
+
+The choice to use a non-fine-tuned model is deliberate and not a shortcoming of the experimental design. It creates a controlled baseline in which the model's behaviour is well-characterised, the corruptions are the only variable, and any detected drift can be attributed unambiguously to image quality rather than to domain-specific model properties. It also reflects a realistic edge case that arises in practice: a pretrained model deployed against a new image domain without adaptation, which is common in resource-constrained settings.
+
+\section{Research Question}%
+\label{sec:onderzoeksvraag}
+
+The central research question guiding this thesis is:
+
+\begin{quote}
+\textit{To what extent can drift-detection algorithms and XAI techniques detect and characterise covariate drift caused purely by image corruption, in a stream of industrial inspection images processed by a non-fine-tuned ResNet-50?}
+\end{quote}
+
+This breaks down into the following more specific questions:
+
+\begin{itemize}
+  \item How do DDM, EDDM, ADWIN, and MDDM compare in terms of detection latency and false-positive rate when the drift signal comes exclusively from image quality degradation?
+  \item Does the type of corruption, noise, blur, brightness shift, compression artefacts, affect detector behaviour, and if so, how?
+  \item Which XAI method (Grad-CAM, SHAP, or LIME) provides the most actionable characterisation of how corruption has affected the model's spatial attention?
+  \item Do XAI attributions shift in a statistically meaningful way around corruption-induced drift events, and does the nature of the shift reflect the corruption type?
+\end{itemize}
+
+\section{Research Objective}%
+\label{sec:onderzoeksdoelstelling}
+
+The concrete output of this thesis is a reproducible Python pipeline. It streams MVTec AD images through a non-fine-tuned ResNet-50, applies ImageNet-C corruptions at increasing severity to simulate sensor degradation, and monitors the resulting prediction-consistency signal with four drift detectors running in parallel. When a detector raises an alarm, three XAI methods are triggered automatically to characterise the attribution shift.
+
+Three criteria define success. First, at least one detector should consistently identify corruption-induced drift earlier than a naive rolling-accuracy baseline. Second, XAI attributions should shift in a statistically distinguishable way around detected events. Third, and this is the part that makes the system useful in practice, the nature of the attribution shift should reflect the corruption type that caused it, so that a practitioner could use the XAI output to diagnose the alert without having to inspect raw images by hand.
+
+\section{Structure of This Thesis}%
+\label{sec:opzet-bachelorproef}
+
+The remainder of this thesis is organised as follows.
+
+Chapter~\ref{ch:stand-van-zaken} reviews the relevant literature: the theory of covariate drift, the landscape of drift-detection algorithms, the current state of XAI for image models, and the two datasets at the centre of this study.
+
+Chapter~\ref{ch:methodologie} describes the experimental pipeline in detail: dataset preparation, corruption protocol, the prediction-consistency monitoring approach, drift detector integration, and XAI triggering logic.
+
+Chapter~\ref{ch:resultaten} presents and discusses the results: detector comparison across corruption types and severity levels, and an analysis of the XAI attribution shifts observed around detected drift events.
+
+Chapter~\ref{ch:conclusie} draws conclusions, situates the findings against the research questions, and identifies directions for future work.

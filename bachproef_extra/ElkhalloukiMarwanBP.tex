@@ -1,0 +1,118 @@
+%===============================================================================
+% LaTeX sjabloon voor de bachelorproef toegepaste informatica aan HOGENT
+% Meer info op https://github.com/HoGentTIN/latex-hogent-report
+%===============================================================================
+
+\documentclass[english,dit,thesis]{hogentreport}
+
+\usepackage{lipsum} % For placeholder text in unfinished chapters
+
+%% Pictures to include in the text can be put in the graphics/ folder
+\graphicspath{{../graphics/}}
+
+%% For source code highlighting, requires pygments to be installed
+%% Compile with the -shell-escape flag!
+%% \usepackage[chapter]{minted}
+%% If you compile with the make_thesis.{bat,sh} script, use the following
+%% import instead:
+\usepackage[chapter,outputdir=../output]{minted}
+\usemintedstyle{solarized-light}
+
+%% Formatting for minted environments.
+\setminted{%
+    autogobble,
+    frame=lines,
+    breaklines,
+    linenos,
+    tabsize=4
+}
+
+%% Ensure the list of listings is in the table of contents
+\renewcommand\listoflistingscaption{List of listings}
+\renewcommand\listingscaption{Listing}
+\renewcommand*\listoflistings{%
+    \cleardoublepage\phantomsection\addcontentsline{toc}{chapter}{\listoflistingscaption}%
+    \listof{listing}{\listoflistingscaption}%
+}
+
+% Other packages not already included can be imported here
+
+%%---------- Document metadata -------------------------------------------------
+\author{Marwan Elkhallouki}
+\supervisor{Dhr. S. De Gheselle (HOGENT, \href{mailto:simon.degheselle@hogent.be}{simon.degheselle@hogent.be})}
+\cosupervisor{F. Papadopoulou (UGent, \href{mailto:Foteini.Papadopoulou@UGent.be}{Foteini.Papadopoulou@UGent.be})}
+\title[XAI-Supported Detection of Corruption-Induced Drift in Visual Inspection]%
+    {XAI-Supported Detection of Image Corruption Drift in Industrial Visual Inspection Using a Non-Fine-Tuned Model}
+\academicyear{2025--2026}
+\examperiod{1}
+\degreesought{Bachelor of applied computer science}
+\partialthesis{false} %% To display 'in partial fulfilment'
+%\institution{Internshipcompany BVBA.}
+
+%% Add global exceptions to the hyphenation here
+\hyphenation{back-slash}
+
+%% The bibliography (style and settings are found in hogentreport.cls)
+\addbibresource{bachproef.bib}            %% Bibliography file
+\addbibresource{../proposal/proposal.bib} %% Bibliography research proposal
+\defbibheading{bibempty}{}
+
+%% Prevent empty pages for right-handed chapter starts in twoside mode
+\renewcommand{\cleardoublepage}{\clearpage}
+
+\renewcommand{\arraystretch}{1.2}
+
+%% Content starts here.
+\begin{document}
+
+%---------- Front matter -------------------------------------------------------
+
+\frontmatter
+
+\hypersetup{pageanchor=false} %% Disable page numbering references
+
+%% Generates title page content
+\maketitle
+\hypersetup{pageanchor=true}
+
+\input{voorwoord}
+\input{samenvatting}
+
+%---------- Inhoud, lijst figuren, ... -----------------------------------------
+
+\tableofcontents
+
+\listoffigures
+
+\listoftables
+
+\listoflistings
+
+%---------- Kern ---------------------------------------------------------------
+
+\mainmatter{}
+
+\input{inleiding}
+\input{standvanzaken}
+\input{methodologie}
+\input{resultaten}
+\input{conclusie}
+
+%---------- Bijlagen -----------------------------------------------------------
+
+\appendix
+
+\chapter{Research Proposal}
+
+The subject of this bachelor's thesis is based on a research proposal that was reviewed and approved by the promotor in advance. That proposal is included in this appendix.
+
+\input{../proposal/proposal-content.tex}
+
+%%---------- Backmatter, referentielijst ---------------------------------------
+
+\backmatter{}
+
+\setlength\bibitemsep{2pt} %% Add Some space between the bibliograpy entries
+\printbibliography[heading=bibintoc]
+
+\end{document}

@@ -1,0 +1,132 @@
+%%=============================================================================
+%% Methodology
+%%=============================================================================
+
+\chapter{Methodology}%
+\label{ch:methodologie}
+
+This chapter describes the experimental pipeline in its entirety. The approach runs through three consecutive phases: dataset preparation and corruption protocol, drift detector integration, and XAI integration. For each phase, the design choices are explained and justified in relation to the research questions stated in Chapter~\ref{ch:inleiding}.
+
+%%============================================================================
+\section{Overview of the Experimental Pipeline}
+\label{sec:pipeline-overview}
+
+Figure~\ref{fig:pipeline} provides a schematic of the full pipeline. A stream of MVTec images is first passed through the non-fine-tuned ResNet-50 in its clean form; these clean predictions serve as pseudo-labels. The same images are then corrupted at progressively increasing severity and re-classified by the same model. A binary consistency signal, 1 if the corrupted prediction agrees with the clean prediction, 0 if it does not, is fed in parallel to four drift detectors. When any detector raises a warning or alarm, an XAI analysis is triggered on a window of recent corrupted images. The resulting attribution maps and importance scores are logged for comparison against the pre-drift baseline.
+
+\begin{figure}[h]
+  \centering
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}
+    \textit{Pipeline diagram: MVTec image $\rightarrow$ Clean ResNet-50 prediction (pseudo-label)
+    $\rightarrow$ Corrupted image at severity $s$ $\rightarrow$ Corrupted ResNet-50 prediction
+    $\rightarrow$ Consistency signal (match / mismatch)
+    $\rightarrow$ DDM / EDDM / ADWIN / MDDM (parallel) $\rightarrow$ Alarm $\rightarrow$
+    XAI window analysis (Grad-CAM, SHAP, LIME) $\rightarrow$ Attribution shift report}
+  \vspace{2cm}}}
+  \caption[Experimental pipeline overview]{Overview of the experimental pipeline. Each MVTec image is classified clean and corrupted; prediction consistency is monitored by four drift detectors in parallel; XAI methods are triggered on alarm.}
+  \label{fig:pipeline}
+\end{figure}
+
+The implementation is written in Python~3.11. PyTorch handles model inference throughout; drift detection relies on River~\autocite{Montiel2021}, and Grad-CAM and SHAP attributions are computed via \texttt{captum}. For LIME, the dedicated \texttt{lime} package~\autocite{Ribeiro2016} is used. All experiments were conducted on a single workstation equipped with an NVIDIA GPU and 32~GB of RAM.
+
+%%============================================================================
+\section{Dataset Preparation}
+\label{sec:dataset-prep}
+
+\subsection{MVTec Image Selection}
+
+Five categories from MVTec AD are used across the experiments: \textit{carpet}, \textit{bottle}, \textit{metal\_nut}, \textit{transistor}, and \textit{leather}. The selection spans both texture categories (carpet, leather) and object categories (bottle, metal\_nut, transistor), giving the evaluation more breadth than a single-category study would allow.
+
+For each category, the full set of images, both normal and defective, from the standard test split is used. Images are resized to $224 \times 224$ pixels to match the ResNet-50 input requirements. No augmentation is applied: the goal is to study the model's behaviour under controlled corruption, not to assess generalisation across augmented variants. Normalisation uses the standard ImageNet mean and standard deviation values ($\mu = [0.485, 0.456, 0.406]$, $\sigma = [0.229, 0.224, 0.225]$) since the model's weights come from ImageNet training.
+
+\subsection{Corruption Protocol}
+
+The corruption types applied to MVTec images are drawn directly from the ImageNet-C benchmark~\autocite{Hendrycks2019}: \textit{Gaussian noise}, \textit{defocus blur}, \textit{brightness}, and \textit{JPEG compression}. The same algorithmic implementations originally provided with ImageNet-C are used without modification, ensuring that the severity levels correspond directly to those in the published benchmark. This makes the corruption intensities interpretable by reference to a well-characterised external standard rather than arbitrary internal parameters.
+
+The streaming experiment for each corruption type proceeds through six phases:
+
+\begin{enumerate}
+  \item \textbf{Phase 0 (clean baseline)}: 200 clean images are streamed through the model. Detectors accumulate statistics on the stable, uncorrupted signal.
+  \item \textbf{Phase 1 (severity 1)}: The same 200 images are re-corrupted at severity 1 and streamed. The consistency signal is computed and fed to detectors.
+  \item \textbf{Phase 2 (severity 2)}: Corruption intensity increases to severity 2.
+  \item \textbf{Phase 3 (severity 3)}: Corruption intensity increases to severity 3.
+  \item \textbf{Phase 4 (severity 4)}: Corruption intensity increases to severity 4.
+  \item \textbf{Phase 5 (severity 5)}: Corruption intensity increases to severity 5 (maximum).
+\end{enumerate}
+
+Each phase transition is the ground-truth drift point. Detector alarms are recorded relative to these known transitions, enabling unambiguous measurement of detection latency and false-positive rate.
+
+The same 200-image pool is reused across severity levels. By holding image content constant and varying only the corruption level, any change in the prediction-consistency signal can be attributed solely to the corruption rather than to differences in image content between phases.
+
+%%============================================================================
+\section{Model}
+\label{sec:model}
+
+The model used throughout is a ResNet-50~\autocite{He2016} with standard ImageNet pre-trained weights, loaded from \texttt{torchvision}. The reported top-1 accuracy of this checkpoint on clean ImageNet validation images is 76.1\%. No fine-tuning, no additional training, and no domain adaptation are applied. The model is used entirely as-is.
+
+This is a deliberate design choice. Using a non-fine-tuned model creates a controlled experimental condition: the model's parameters are fixed, its behaviour on clean images is predictable, and any change in the prediction-consistency signal over the corruption phases can be attributed to the corruption rather than to model updates. It also reflects a realistic operational scenario in which a general-purpose pretrained model is deployed against a new image domain without adaptation, a common situation in resource-constrained industrial settings.
+
+The model runs in evaluation mode throughout; batch normalisation statistics are frozen at their training values and no gradients are accumulated during inference (except for the brief Grad-CAM computation triggered on drift alarms).
+
+%%============================================================================
+\section{Prediction-Consistency Monitoring}
+\label{sec:consistency}
+
+Standard drift detectors require a binary signal at each time step: typically, whether a prediction was correct or incorrect. In this experiment, ground-truth ImageNet labels for MVTec images are not meaningful, MVTec images do not belong to ImageNet classes. Instead, the reference is the model's own prediction on the clean version of the same image.
+
+Concretely, for each image $x_i$ in the stream:
+
+\begin{enumerate}
+  \item The clean prediction $\hat{y}_i^{\text{clean}} = \arg\max_k f(x_i)_k$ is computed once before the corruption phases begin and stored as the pseudo-label.
+  \item During each corruption phase, the corrupted version $x_i^{(s)}$ (at severity $s$) is classified to obtain $\hat{y}_i^{(s)}$.
+  \item The consistency signal is $c_i^{(s)} = \mathbb{1}[\hat{y}_i^{(s)} = \hat{y}_i^{\text{clean}}]$: 1 if the corrupted prediction matches the clean pseudo-label, 0 if it does not.
+\end{enumerate}
+
+This consistency signal is fed as the error stream to all four drift detectors. From the detector's perspective, a $c_i^{(s)} = 0$ event is treated as a ``prediction error''. When corruptions are mild, the corrupted predictions largely agree with the clean ones and the error rate is low. As severity increases, agreement breaks down and errors cluster, which is precisely the pattern that DDM, EDDM, ADWIN, and MDDM are designed to detect.
+
+One important property of this formulation is that it requires no human-provided ground-truth labels at inference time. The reference labels are derived entirely from the model's own behaviour on uncorrupted images, making the approach directly applicable in deployment settings where labelling infrastructure is not available.
+
+%%============================================================================
+\section{Drift Detection Integration}
+\label{sec:dd-integration}
+
+All four drift detectors, DDM, EDDM, ADWIN, and MDDM, receive the same consistency stream and run simultaneously. Their outputs are logged independently, allowing detection latencies and alarm rates to be compared directly.
+
+Default hyperparameters from the original publications and their River~\autocite{Montiel2021} implementations are used throughout. The DDM and EDDM warning and drift thresholds are set to the commonly cited values of $\alpha = 0.95$ and $\alpha = 0.99$ respectively. ADWIN's $\delta$ parameter is set to $0.002$. MDDM uses a window size of 100 with the recency weight scheme described in~\textcite{Pesaranghader2017}.
+
+A naive baseline is included for comparison: a rolling mean of the consistency signal that triggers an alarm when the mean drops below 0.80 over a window of 200 samples (i.e., when more than 20\% of predictions in the window disagree with their clean-image counterparts). This represents the kind of simple threshold monitoring that practitioners implement when dedicated drift detection infrastructure is not available.
+
+%%============================================================================
+\section{XAI Integration}
+\label{sec:xai-integration}
+
+When a drift detector raises an alarm, an XAI analysis is triggered automatically. The analysis compares two windows of images:
+
+\begin{itemize}
+  \item \textbf{Pre-drift window}: the 100 most recent images \textit{before} the alarm was raised, taken from the current corruption phase.
+  \item \textbf{Post-drift window}: the 100 images immediately following the alarm, taken from the same or the next corruption phase.
+\end{itemize}
+
+Three sets of attributions are computed for each window:
+
+\begin{enumerate}
+  \item \textbf{Grad-CAM}: A heatmap is generated for each image using the gradients of the predicted class score with respect to the activations of ResNet-50's final convolutional layer (\texttt{layer4}). The per-pixel activation values are averaged across the window. The difference between the two averaged heatmaps is visualised as a change map, with warm colours indicating regions that gained importance and cool colours indicating regions that lost it.
+  \item \textbf{SHAP (KernelSHAP)}: Superpixel-level SHAP values are computed for a stratified random sample of 50 images per window. The mean absolute SHAP value per superpixel is compared between windows using a two-sample Kolmogorov--Smirnov test at $\alpha = 0.05$.
+  \item \textbf{LIME}: Superpixel importance weights are computed for the same 50-image sample. The top-5 most important superpixels per image are identified, and the overlap coefficient between the top-5 sets across pre- and post-drift windows is calculated. Values below 0.5 are taken as indicative of substantial attribution shift.
+\end{enumerate}
+
+The combination is intentional. Grad-CAM gives operators a visual that is immediately readable: a spatial footprint of what the corruption changed. SHAP and LIME provide the quantitative backing for engineers who need to characterise the magnitude and statistical significance of the shift. The design serves both audiences, a quick visual summary for someone diagnosing an alert, and a defensible number for someone writing a report.
+
+%%============================================================================
+\section{Evaluation Metrics}
+\label{sec:evaluation}
+
+The detectors are evaluated on the following metrics:
+
+\begin{itemize}
+  \item \textbf{Detection latency}: the number of samples processed between the phase transition (the point at which the new corruption severity begins) and the moment the detector raises its first alarm. Lower is better.
+  \item \textbf{False positive rate (FPR)}: the proportion of alarms raised during the clean baseline phase (Phase 0) that do not correspond to a genuine drift event. Lower is better.
+  \item \textbf{True positive rate (TPR)}: the proportion of severity transitions for which an alarm is raised within a tolerance window of 200 samples. Higher is better.
+  \item \textbf{Consistency before and after transition}: the mean consistency signal in the 100 images before the first alarm versus the 100 images after, giving a sense of the operational magnitude of the detected shift.
+\end{itemize}
+
+Evaluating the XAI methods is, by its nature, more qualitative. The SHAP KS-test result provides a binary signal, statistically significant attribution shift or not. The Grad-CAM change maps are rated by two independent reviewers on a three-point scale: no visible change, partial change, or clear change. The LIME overlap coefficient is reported as a scalar. Results are broken down by corruption type and severity transition to allow comparison across the four corruption scenarios.
