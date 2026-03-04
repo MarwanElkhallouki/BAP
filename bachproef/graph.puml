@@ -1,0 +1,45 @@
+@startuml
+skinparam monochrome true
+skinparam shadowing false
+
+title Experimental Pipeline Overview
+
+start
+
+:Prepare MVTec AD data;
+:Fine-tune ResNet-50;
+
+:Select corruption type + severity;
+:Stream corrupted images;
+
+:Model inference;
+:Prediction + delayed label;
+:Binary error signal;
+
+fork
+  :DDM;
+fork again
+  :EDDM;
+fork again
+  :ADWIN;
+fork again
+  :MDDM;
+end fork
+
+if (Drift alarm?) then (Yes)
+  :Select pre/post-drift window;
+  fork
+    :Grad-CAM;
+  fork again
+    :SHAP;
+  fork again
+    :LIME;
+  end fork
+  :Compute attribution shift;
+endif
+
+:Compute AUROC + ADA;
+:Log detection metrics;
+
+stop
+@enduml
