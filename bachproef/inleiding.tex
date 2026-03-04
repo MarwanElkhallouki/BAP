@@ -5,23 +5,23 @@
 \chapter{Introduction}%
 \label{ch:inleiding}
 
-This thesis looks at two problems that have started to get more attention in teh machine learning field: drift detection and explainable AI. Both are relevant to industrial inspection systems where a CNN classifies images from a camera on a production line. The model works fine at first, but over time things change, the camera degrades, lighting shifts, new defect types appear. Performance drops. The problem is that nobody notices until it's too late.
+There is a gap between a model performing well on its validation set and that same model being trusted in a production environment, and the research community has only recently started taking it seriously. In manufacturing, that gap is anything but abstract. A camera mounted above a conveyor belt records thousands of images per shift. A convolutional neural network classifies each one as normal or defective. Operators act on those classifications. When the model is reliable, the line runs. When it degrades quietly, because the camera sensor is aging, because the light changes with the season, or because a supplier has switched materials and new defect patterns have appeared that the model was never trained on, the consequences are real: missed defects reaching customers, unnecessary downtime, and an eroding confidence in a system that was supposed to help.
 
-Drift detection is about figuring out \textit{when} a model's performance has changed. Explainable AI asks \textit{why} the model behaves the way it does. Together they can give engineers not just an alarm, but an explanation of what changed. That combination is what I'm trying to build in this thesis.
+This thesis sits at the intersection of two research areas that have, until fairly recently, developed mostly in parallel: drift detection and explainable AI. Drift detection concerns itself with the question of \textit{when} a model's input distribution or performance has shifted enough to warrant attention. Explainable AI asks \textit{why} a model behaves as it does. Together they offer something that neither can provide on its own, not just an alarm, but an account of what triggered it. The difference, in practice, between knowing something has gone wrong and actually understanding what changed.
 
 \section{Problem Statement}%
 \label{sec:probleemstelling}
 
-Deep learning has been adopted widely in manufacturing, automated visual inspection is used in electronics, food processing, automotive, and more. But teh deployment pattern is almost always the same: train once, validate, deploy, and forget. \textcite{Radhakrishnan2020} point out that this lack of post-deployment monitoring is one of the main reasons organisations struggle to trust AI systems.
+Over the past decade, deep learning models have found their way into industrial settings at a pace that has outrun the supporting infrastructure for keeping them healthy over time. Automated visual inspection is a clear example: it has been widely adopted across electronics manufacturing, food processing, automotive components, and more. Yet the deployment pattern, as \textcite{Radhakrishnan2020} point out, tends to be the same almost everywhere, train once, validate on a static dataset, deploy, and move on. There is rarely a robust mechanism for monitoring what happens afterward.
 
-The specific problem is that there's no practical pipeline that both detects model degradation in image inspection systems and explains what's going on to the engineers who need to fix it. Just watching accuracy is slow and uninformative. It tells you something went wrong. It doesn't tell you where to look.
+The specific problem this thesis addresses is the absence of operationally practical pipelines that both \textit{detect} model degradation in image-based inspection systems and \textit{explain} the nature of that degradation to the engineers who have to decide what to do about it. Simple performance monitoring, watching whether accuracy dips below some threshold, is slow and tends to be uninformative. It tells you that something has gone wrong. It does not tell you where to look or what changed.
 
-The audience for this work is ML engineers and reliability teams working with visual inspection in manufacturing. These people know model architectures and deployment. What they often lack is actionable diagnostics, something more specific form a dropped accuracy score.
+The intended audience here is ML engineers and reliability teams running visual inspection pipelines in manufacturing. These are people who understand model architectures and deployment infrastructure well enough. What they often lack is actionable diagnostics, something more specific than a dropped accuracy score.
 
 \section{Research Question}%
 \label{sec:onderzoeksvraag}
 
-The central research question is:
+The central research question guiding this thesis is:
 
 \begin{quote}
 \textit{How can drift-detection algorithms and XAI techniques be combined into a practical pipeline for timely detection and explanation of model degradation in industrial visual inspection, and to what extent are these techniques effective at identifying covariate drift and image corruption?}
@@ -33,22 +33,22 @@ This breaks down into several more specific questions:
   \item How does model degradation manifest in CNN-based industrial defect detection?
   \item Which drift-detection algorithms offer the best trade-off between detection latency and false positive rate for image classification pipelines?
   \item Which XAI methods produce the most actionable explanations when a drift event is detected?
-  \item Do the findings generalise beyond industrial inspection to other image-domain scenarios?
+  \item Do the findings generalise beyond industrial inspection to other image-domain scenarios, such as simulated camera corruption?
 \end{itemize}
 
 \section{Research Objective}%
 \label{sec:onderzoeksdoelstelling}
 
-The output of this thesis is a reproducible pipeline implemented in Python that integrates a trained CNN with drift detectors and XAI methods. Two datasets are used: the MVTec Anomaly Detection Dataset~\autocite{Bergmann2019} as the main case, and ImageNet-C~\autocite{Hendrycks2019} as a secondary validation for camera degradation scenarios.
+The concrete output of this thesis is a reproducible pipeline, implemented in Python, that integrates a trained CNN with a suite of drift detectors and XAI methods. Two datasets are used for evaluation: the MVTec Anomaly Detection Dataset~\autocite{Bergmann2019} as the primary industrial inspection case, and ImageNet-C~\autocite{Hendrycks2019} as a secondary validation covering simulated sensor and camera degradation.
 
-Success means three things. At least one drift detector should catch degradation earlier than a simple accuracy threshold. XAI attributions should shift meaningfully around detected drift events. And the pipeline should give practitioners information to distinguish between different causes of degradation without manual image review.
+Three criteria define success. First, at least one drift detector should consistently identify degradation earlier than a naive accuracy-threshold baseline. Second, XAI attributions should shift in a statistically meaningful way around detected drift events. And third, the pipeline should give a practitioner enough information to distinguish between different causes of degradation without going back to re-examine raw image data manually.
 
 \section{Structure of This Thesis}%
 \label{sec:opzet-bachelorproef}
 
 The remainder of this thesis is structured as follows.
 
-Chapter~\ref{ch:stand-van-zaken} reviews the literature, concept drift, drift detection algorithms, XAI for image models, and the datasets used.
+Chapter~\ref{ch:stand-van-zaken} reviews the relevant literature, the theory of concept drift and its taxonomies, the landscape of drift-detection algorithms, the current state of XAI for image models, and the datasets used in this study.
 
-Chapter~\ref{ch:methodologie} describes the experimental pipeline, models, drift simulation, and how detectors and XAI methods are integrated.
+Chapter~\ref{ch:methodologie} describes the methodological approach: the experimental pipeline, the models used, how drift is simulated, and how detectors and XAI methods are integrated and evaluated.
 
