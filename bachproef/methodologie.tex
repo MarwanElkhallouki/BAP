@@ -5,22 +5,66 @@
 \chapter{Methodology}%
 \label{ch:methodologie}
 
-This chapter describes the experimental pipeline. It covers dataset preparation, model training, drift detection, and XAI integration. The design choices are based on the research questions from Chapter~\ref{ch:inleiding}.
+The experimental pipeline runs through three consecutive phases: dataset preparation and model training, drift detection, and XAI integration. Each phase builds directly on the previous one, and the design choices at every step are grounded in the research questions posed in Chapter~\ref{ch:inleiding}.
 
 %%============================================================================
 \section{Overview of the Experimental Pipeline}
 \label{sec:pipeline-overview}
 
-Figure~\ref{fig:pipeline} shows the pipeline. Each image from the simulated production stream goes through the trained CNN, which produces a class prediction. That prediction, along with the true label (which arrives with a one-batch delay), feeds four drift detectors running in parallel. When a detector raises an alarm, XAI analysis is triggered on a window of recent images.
+Figure~\ref{fig:pipeline} lays out the full pipeline schematically. At inference time, each image from the simulated production stream passes through the trained CNN, which produces a class prediction. That prediction, alongside the true label, which arrives with a one-batch delay, feeds four drift detectors running in parallel. Whenever any detector raises a warning or alarm, an XAI analysis is triggered on a window of recent images. The resulting attribution maps and importance scores are logged and compared against the pre-drift baseline.
 
 \begin{figure}[h]
   \centering
-  \fbox{\parbox{0.8\textwidth}{\centering\vspace{2cm}[Pipeline diagram, to be added]\vspace{2cm}}}
-  \caption[Experimental pipeline overview]{Overview of the experimental pipeline.}
+  \includegraphics[height=0.9\textheight]{graph.png}
+  \caption[Experimental pipeline overview]{Overview of the experimental pipeline. Images are streamed to the CNN, predictions are monitored by four drift detectors in parallel, and XAI methods are triggered on drift alarm.}
   \label{fig:pipeline}
 \end{figure}
 
-The implementation is written in Python~3.11. PyTorch handles model training and inference. Drift detection uses River~\autocite{Montiel2021}, and attributions are computed via \texttt{captum} for Grad-CAM and SHAP, and the \texttt{lime} package~\autocite{Ribeiro2016} for LIME. Experiments ran on a workstation with an NVIDIA GPU and 32~GB of RAM.
+% \begin{figure}[h]
+% \centering
+% \begin{plantuml}
+% @startuml
+% skinparam monochrome true
+% skinparam shadowing false
+
+% start
+
+% :Simulated Production Image Stream;
+
+% :ResNet-50 Inference;
+% :Class Prediction;
+
+% fork
+%   :DDM;
+% fork again
+%   :EDDM;
+% fork again
+%   :ADWIN;
+% fork again
+%   :MDDM;
+% end fork
+
+% :Drift Warning / Alarm?;
+
+% if (Alarm Triggered?) then (Yes)
+%   :Collect Recent Image Window;
+%   :XAI Analysis;
+%   :Grad-CAM;
+%   :SHAP;
+%   :LIME;
+%   :Attribution Shift Report;
+% else (No)
+%   :Continue Monitoring;
+% endif
+
+% stop
+% @enduml
+% \end{plantuml}
+% \caption[Experimental pipeline overview]{Overview of the experimental pipeline. Images are streamed to ResNet-50, predictions are monitored by four drift detectors in parallel, and XAI methods are triggered upon drift alarm.}
+% \label{fig:pipeline}
+% \end{figure}
+
+The implementation is written in Python~3.11. PyTorch handles model training and inference throughout; drift detection relies on River~\autocite{Montiel2021}, and SHAP together with Grad-CAM attributions are computed via \texttt{captum}. LIME uses the dedicated \texttt{lime} package~\autocite{Ribeiro2016}. All experiments ran on a single workstation equipped with an NVIDIA GPU and 32~GB of RAM.
 
 %%============================================================================
 \section{Dataset Preparation}
@@ -28,23 +72,23 @@ The implementation is written in Python~3.11. PyTorch handles model training and
 
 \subsection{MVTec AD}
 
-I use five categories from MVTec AD: \textit{carpet}, \textit{bottle}, \textit{metal\_nut}, \textit{transistor}, and \textit{leather}. These cover both texture and object categories which gives more variety than a single-category study.
+The primary experiments use five categories from MVTec AD: \textit{carpet}, \textit{bottle}, \textit{metal\_nut}, \textit{transistor}, and \textit{leather}. Spanning both texture and object categories, this selection gives the evaluation more breadth than any single-category study could.
 
-The original dataset only has normal images in the training split. For each category, two of the available defect types are added to the training split, making it a supervised binary classification task. At test time I use the full test split including both normal and defective images. This is closer to what a real production stream looks like.
+The original benchmark provides only normal images in its training split. For each category, two of the available defect types are added to that split, turning the task into supervised binary classification. At test time, the full test split is used, both clean (normal) images and all available defective images, which mirrors the composition of a real production inspection stream, where defects occur alongside conforming parts.
 
-Testing uses a corruption-severity sweep. ImageNet-C corruptions are applied to both normal and defective images at five severity levels. This tests how well the model can still separate defective from normal images as image quality drops. The clean-to-defective ratio from the original test split is preserved at each severity level.
+Testing follows a corruption-severity sweep. The same ImageNet-C corruption functions are applied identically to both normal and defective images at each of five severity levels. This design directly targets anomaly separability: the model's capacity to score defective images higher than normal ones as image quality degrades. To avoid confounding results with class prior effects, the clean-to-defective ratio from the original test split is preserved at every severity level.
 
-Images are resized to $224 \times 224$ pixels. Horizontal flip, random rotation of up to $\pm10^{\circ}$, and colour jitter are applied during training only.
+Images are resized to $224 \times 224$ pixels to match the ResNet-50 input format. Horizontal flip, random rotation of up to $\pm10^{\circ}$, and colour jitter are applied as augmentation during training only.
 
 \subsection{Corruption Application Procedure}
 
-Corruptions come from the \texttt{imagecorruptions} Python library~\autocite{Hendrycks2019}, which has all fifteen corruption types from ImageNet-C. Four types are used: \textit{Gaussian noise}, \textit{defocus blur}, \textit{brightness} shift, and \textit{JPEG compression}. These cover the main camera degradation modes in industrial inspection.
+Corruptions come from the \texttt{imagecorruptions} Python library~\autocite{Hendrycks2019}, which reimplements all fifteen corruption types from the ImageNet-C benchmark. Four types are evaluated here: \textit{Gaussian noise} (sensor noise), \textit{defocus blur} (lens degradation), \textit{brightness} shift (illumination variation), and \textit{JPEG compression} (transmission artefacts). Together they cover the camera degradation modes most frequently encountered in industrial inspection settings.
 
-Each corruption type is tested at five severity levels. Severity 0 is the clean baseline. Normal and defective images get the same treatment. Table~\ref{tab:corruption-taxonomy} describes what each level looks like.
+Each corruption type is evaluated at five severity levels, yielding a 5-point degradation curve per type. Severity level 0 is the clean, uncorrupted baseline. Normal and defective images receive identical treatment, no differential corruption is introduced. Table~\ref{tab:corruption-taxonomy} describes what each severity level looks like qualitatively.
 
 \begin{table}[h]
   \centering
-  \caption[Corruption severity taxonomy]{Qualitative description of corruption intensity at each severity level.}
+  \caption[Corruption severity taxonomy]{Qualitative description of corruption intensity at each severity level for the four corruption types used in the primary experiments.}
   \label{tab:corruption-taxonomy}
   \small
   \begin{tabular}{lp{2.0cm}p{2.0cm}p{2.0cm}p{2.0cm}p{2.0cm}}
@@ -62,50 +106,50 @@ Each corruption type is tested at five severity levels. Severity 0 is the clean 
 
 \subsection{ImageNet-C}
 
-The secondary experiments use a pre-trained ResNet-50~\autocite{He2016} without fine-tuning. Images from ImageNet-C are streamed at increasing severity levels. The same four corruption types are used so I can compare corruption sensitivity between the fine-tuned industrial model and the general-purpose one.
+The secondary experiments run a pre-trained ResNet-50~\autocite{He2016} without any fine-tuning. Images from ImageNet-C are streamed in order of increasing severity, 1 through 5, one corruption type at a time. The same four corruption types as in the MVTec AD experiments are used, making it possible to compare corruption sensitivity directly between the fine-tuned industrial model and the general-purpose one.
 
 %%============================================================================
 \section{Model Training}
 \label{sec:model-training}
 
-The primary model is a ResNet-50~\autocite{He2016} pre-trained on ImageNet and fine-tuned for each MVTec AD category as a binary classifier (normal vs.\ defective). I use cross-entropy loss with an Adam optimiser: a learning rate of $1 \times 10^{-4}$ for the final classification layer and $1 \times 10^{-5}$ for the backbone, with early stopping based on validation F1-score at a patience of 10 epochs.
+The primary model is a ResNet-50~\autocite{He2016} pre-trained on ImageNet and fine-tuned separately for each MVTec AD category as a binary classifier (normal vs.\ defective). Fine-tuning uses cross-entropy loss with an Adam optimiser: a learning rate of $1 \times 10^{-4}$ for the final classification layer and $1 \times 10^{-5}$ for the convolutional backbone, with early stopping based on validation F1-score at a patience of 10 epochs.
 
-ResNet-50 is a good choice for this because it has enough depth to separate texture and structural differences. It's also well-characterised in the literature and directly supported by Grad-CAM without any extra adaptation.
+ResNet-50 is a deliberate choice. Its depth gives it the representational capacity needed to separate the texture and structural differences that distinguish defective from normal parts. It is also well-characterised in the literature, which makes it a defensible and interpretable baseline. And practically, its architecture is fully supported by Grad-CAM, a method that requires access to a layer that produces spatially structured feature maps. While Grad-CAM can be adapted to Vision Transformers via reshape transforms~\autocite{Selvaraju2017}, doing so requires non-trivial modifications and careful layer selection; ResNet-50 supports it directly without any such adaptation overhead.
 
 %%============================================================================
 \section{Drift Detection Integration}
 \label{sec:dd-integration}
 
-DDM, EDDM, ADWIN, and MDDM all work on the same binary error signal. The four detectors run in parallel on the same stream, with their outputs logged independently.
+DDM, EDDM, ADWIN, and MDDM all operate on the same binary error signal: the comparison between the model's predictions and the delayed ground-truth labels. The four detectors run simultaneously on the same stream, their outputs logged independently so that detection latencies and alarm rates can be compared directly.
 
-Hyperparameters are set to defaults from the original publications. DDM uses warning and drift thresholds of $\alpha = 0.95$ and $\alpha = 0.99$~\autocite{Gama2004}. EDDM uses warning and drift thresholds of $\alpha = 0.95$ and $\beta = 0.9$~\autocite{baena2006early}. ADWIN's $\delta$ is set to $0.002$~\autocite{Bifet2007}. MDDM uses a window size of 100~\autocite{Pesaranghader2017}.
+Hyperparameters are set to the defaults from the original publications and their River implementations. DDM uses a warning threshold of $\alpha = 0.95$ and a drift threshold of $\alpha = 0.99$~\autocite{Gama2004}. EDDM uses a warning threshold of $\alpha = 0.95$ and a drift threshold of $\beta = 0.9$~\autocite{baena2006early}. ADWIN's $\delta$ parameter is set to $0.002$~\autocite{Bifet2007}. MDDM uses a window size of 100 with the recency weight scheme described in~\textcite{Pesaranghader2017}.
 
-A naive baseline is included: a rolling accuracy monitor that triggers when accuracy drops below 80\% of training accuracy over a 500-sample window.
+A naive baseline is included for reference: a rolling accuracy monitor that triggers when accuracy falls below 80\% of training accuracy over a 500-sample window. This represents the kind of lightweight monitoring many practitioners reach for when dedicated drift infrastructure is not available, and it provides a useful lower bound for what the proper detectors should beat.
 
-The stream is ordered by increasing corruption severity: severity 0 first, then 1, up to 5. Each transition is a drift event. Detection latency is measured from the first image of the new severity to the first alarm. False positive rate is evaluated on the clean severity-0 stream.
+In the corruption-severity sweep, the detectors work on a stream ordered by increasing severity: all severity-0 images first, then severity-1, and so on up to severity-5. Each severity transition constitutes an injected drift event. Detection latency is measured from the first image of the new severity level to the moment the detector raises its first alarm. The false positive rate is evaluated on the clean severity-0 stream before any corruption is introduced.
 
 %%============================================================================
 \section{XAI Integration}
 \label{sec:xai-integration}
 
-When a detector raises an alarm, XAI analysis runs automatically on two windows:
+When a drift detector raises an alarm, an XAI analysis is triggered automatically. The analysis compares two windows of images:
 
 \begin{itemize}
-  \item \textbf{Pre-drift window}: the 200 most recent images \textit{before} the alarm.
-  \item \textbf{Post-drift window}: the 200 images immediately after the alarm.
+  \item \textbf{Pre-drift window}: the 200 most recent images \textit{before} the alarm was raised.
+  \item \textbf{Post-drift window}: the 200 images immediately following the alarm.
 \end{itemize}
 
-Three sets of attributions are computed:
+Three sets of attributions are computed for each window:
 
 \begin{enumerate}
-  \item \textbf{Grad-CAM}: a heatmap per image, averaged across the window. The difference between the two averaged heatmaps is shown as a change map.
-  \item \textbf{SHAP (KernelSHAP)}: superpixel-level SHAP values for a stratified sample of 50 images per window. Mean absolute SHAP values per superpixel are compared using a two-sample KS-test at $\alpha = 0.05$.
-  \item \textbf{LIME}: superpixel importance weights for the same 50-image sample. The top-5 most important superpixels per image are identified and the overlap coefficient between pre- and post-drift sets is calculated.
+  \item \textbf{Grad-CAM}: A heatmap is generated for each image and the per-pixel activation values are averaged across the window. The difference between the two averaged heatmaps is visualised as a change map.
+  \item \textbf{SHAP (KernelSHAP)}: Superpixel-level SHAP values are computed for a stratified random sample of 50 images per window. The mean absolute SHAP value per superpixel is compared between windows using a two-sample Kolmogorov--Smirnov test, with statistical significance at $\alpha = 0.05$.
+  \item \textbf{LIME}: Superpixel importance weights are computed for the same 50-image sample. The top-5 most important superpixels per image are identified, and the overlap coefficient between the top-5 sets across pre- and post-drift windows is calculated.
 \end{enumerate}
 
-Grad-CAM gives spatial heatmaps that are easy to read at a glance. SHAP and LIME give numbers that can be tracked over time. Different people on a reliability team want different things, so having both is useful.
+Each method brings something different to the table. Grad-CAM produces spatial heatmaps that an operator can read at a glance; SHAP and LIME yield quantitative scores that engineers can track over time. A reliability team is rarely homogeneous, some people want a picture, others want a number, and the pipeline is designed to serve both.
 
-In addition to alarm-triggered analysis, mean Grad-CAM heatmaps are compared at each corruption severity against the clean baseline. The Attribution-to-Defect Alignment (ADA) score is computed using ground-truth pixel masks from MVTec AD, producing a per-severity curve that shows whether the model is still looking at actual defect regions or has shifted to corruption artefacts.
+Beyond the alarm-triggered comparison, an additional XAI analysis compares attribution maps at the clean baseline (severity 0) against each corruption severity level in isolation. For each severity, the mean Grad-CAM heatmap is computed over 50 randomly drawn defective images and set against the mean clean-image heatmap. The Attribution-to-Defect Alignment (ADA) score, defined in Section~\ref{sec:evaluation}, is then calculated at each severity level using the ground-truth pixel masks provided with MVTec AD, producing a per-severity ADA curve that directly measures whether the model is still attending to actual defect regions or has begun tracking corruption artefacts instead.
 
 %%============================================================================
 \section{Evaluation Metrics}
@@ -113,29 +157,31 @@ In addition to alarm-triggered analysis, mean Grad-CAM heatmaps are compared at 
 
 \subsection{Drift Detector Metrics}
 
+Four metrics capture different aspects of detector behaviour:
+
 \begin{itemize}
-  \item \textbf{Detection latency}: samples between the new severity level and the first alarm. Lower is better.
-  \item \textbf{False positive rate (FPR)}: alarms raised during the clean severity-0 stream that are not real drift events. Lower is better.
-  \item \textbf{True positive rate (TPR)}: proportion of genuine severity transitions that trigger an alarm within 500 samples. Higher is better.
-  \item \textbf{Accuracy before and after drift}: the gap between pre-alarm and post-alarm accuracy gives a sense of operational impact.
+  \item \textbf{Detection latency}: the number of samples processed between the point at which a new severity level is introduced and the moment the detector raises its first alarm. Lower is better.
+  \item \textbf{False positive rate (FPR)}: the proportion of alarms raised during the clean severity-0 stream that do not correspond to a genuine drift event. Lower is better.
+  \item \textbf{True positive rate (TPR)}: the proportion of genuine severity transitions for which an alarm is raised within a tolerance window of 500 samples. Higher is better.
+  \item \textbf{Accuracy before and after drift}: the model's classification accuracy in the 200 images before the first alarm versus the 200 images after. The gap gives a sense of the operational impact of detected drift.
 \end{itemize}
 
 \subsection{Anomaly Detection Performance Metric}
 
-Performance degradation is measured with the Area Under the Receiver Operating Characteristic curve (\textbf{AUROC})~\autocite{Fawcett2006}. AUROC is the probability that a randomly drawn defective image scores higher than a randomly drawn normal image, threshold-free and interpretable as severity increases.
+Performance degradation under corruption is quantified with a single metric: the Area Under the Receiver Operating Characteristic curve (\textbf{AUROC})~\autocite{Fawcett2006}. Concretely, AUROC is the probability that a randomly drawn defective image receives a higher confidence score than a randomly drawn normal image, a threshold-free quantity that stays interpretable as severity climbs. Computing it at each severity level yields a degradation profile per corruption type and category.
 
-AUROC plays a supporting role here. The drift detectors and XAI methods are the main analysis objects. AUROC confirms that alarm behaviour corresponds to real measurable degradation.
+Within this study, AUROC plays a supporting rather than primary role. The drift detectors and XAI methods are the main objects of analysis; AUROC is the sanity check that confirms their alarm behaviour and attribution shifts correspond to real, measurable degradation, not statistical noise.
 
 \subsection{XAI Attribution Metrics}
 \label{sec:xai-metrics}
 
-The SHAP KS-test gives a binary signal at $\alpha = 0.05$. Grad-CAM change maps are assessed by two reviewers on a three-point scale: no change, partial change, clear change. LIME gives a scalar overlap coefficient; below 0.5 is treated as a substantial shift.
+Each XAI method produces its own form of evidence. The SHAP KS-test reduces to a binary signal, significant attribution shift or not, at a significance threshold of $\alpha = 0.05$. Grad-CAM change maps are assessed by two independent reviewers on a three-point scale: no visible change, partial change, or clear change. LIME contributes a scalar overlap coefficient; anything below 0.5 is treated as indicative of substantial attribution shift.
 
-The \textbf{Attribution-to-Defect Alignment (ADA)} score is the IoU between the binarised Grad-CAM activation map (top 20\% of pixels) and the ground-truth defect mask from MVTec AD:
+Beyond the alarm-triggered window comparison, the \textbf{Attribution-to-Defect Alignment (ADA)} score is computed at each severity level. ADA is the Intersection-over-Union (IoU) between the binarised Grad-CAM activation map, thresholded at the top 20\% of activated pixels, and the ground-truth defect mask from MVTec AD:
 
 \[
   \text{ADA} = \frac{|M_{\text{Grad-CAM}} \cap M_{\text{defect}}|}{|M_{\text{Grad-CAM}} \cup M_{\text{defect}}|}
 \]
 
-A dropping ADA curve means the model has started attending to the wrong parts of the image. Each point is the mean over 50 randomly drawn defective images.
+A declining ADA curve means the model has started attending to the wrong parts of the image, pulled toward corruption artefacts, or simply losing the defect signal under the degradation. Each point on that curve is the mean over 50 randomly drawn defective images from the category in question.
 
