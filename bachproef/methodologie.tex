@@ -106,7 +106,7 @@ Each corruption type is evaluated at five severity levels, yielding a 5-point de
 
 \subsection{ImageNet-C}
 
-The secondary experiments run a pre-trained ResNet-50~\autocite{He2016} without any fine-tuning. Images from ImageNet-C are streamed in order of increasing severity, 1 through 5, one corruption type at a time. The same four corruption types as in the MVTec AD experiments are used, making it possible to compare corruption sensitivity directly between the fine-tuned industrial model and the general-purpose one.
+The secondary experiments run a pre-trained ResNet-50~\autocite{He2016} without any fine-tuning (standard \texttt{torchvision} \texttt{IMAGENET1K\_V1} weights; ImageNet top-1 accuracy: 76.1\%). Images from ImageNet-C are streamed in order of increasing severity, 1 through 5, one corruption type at a time. The same four corruption types as in the MVTec AD experiments are used, making it possible to compare corruption sensitivity directly between the fine-tuned industrial model and the general-purpose one.
 
 %%============================================================================
 \section{Model Training}
@@ -122,7 +122,7 @@ ResNet-50 is a deliberate choice. Its depth gives it the representational capaci
 
 DDM, EDDM, ADWIN, and MDDM all operate on the same binary error signal: the comparison between the model's predictions and the delayed ground-truth labels. The four detectors run simultaneously on the same stream, their outputs logged independently so that detection latencies and alarm rates can be compared directly.
 
-Hyperparameters are set to the defaults from the original publications and their River implementations. DDM uses a warning threshold of $\alpha = 0.95$ and a drift threshold of $\alpha = 0.99$~\autocite{Gama2004}. EDDM uses a warning threshold of $\alpha = 0.95$ and a drift threshold of $\beta = 0.9$~\autocite{baena2006early}. ADWIN's $\delta$ parameter is set to $0.002$~\autocite{Bifet2007}. MDDM uses a window size of 100 with the recency weight scheme described in~\textcite{Pesaranghader2017}.
+Hyperparameters are set to the defaults from the original publications and their River implementations. DDM uses a warning multiplier of 2.0 and a drift multiplier of 3.0, corresponding to confidence levels of approximately 95\% and 99\%~\autocite{Gama2004}. EDDM uses a warning threshold of $\alpha = 0.95$ and a drift threshold of $\beta = 0.9$~\autocite{baena2006early}. ADWIN's $\delta$ parameter is set to $0.002$~\autocite{Bifet2007}. MDDM uses a window size of 100 with the recency weight scheme described in~\textcite{Pesaranghader2018}.
 
 A naive baseline is included for reference: a rolling accuracy monitor that triggers when accuracy falls below 80\% of training accuracy over a 500-sample window. This represents the kind of lightweight monitoring many practitioners reach for when dedicated drift infrastructure is not available, and it provides a useful lower bound for what the proper detectors should beat.
 
@@ -184,4 +184,3 @@ Beyond the alarm-triggered window comparison, the \textbf{Attribution-to-Defect 
 \]
 
 A declining ADA curve means the model has started attending to the wrong parts of the image, pulled toward corruption artefacts, or simply losing the defect signal under the degradation. Each point on that curve is the mean over 50 randomly drawn defective images from the category in question.
-
