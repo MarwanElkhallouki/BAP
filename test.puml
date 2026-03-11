@@ -1,0 +1,120 @@
+@startuml
+skinparam ActivityBackgroundColor #f0f4ff
+skinparam ActivityBorderColor #3355aa
+skinparam ArrowColor #3355aa
+skinparam ActivityFontSize 13
+skinparam NoteBackgroundColor #fffde7
+skinparam NoteBorderColor #f0a000
+
+title Experimental Methodology Pipeline\n XAI-Supported Evaluation of Model Degradation in Industrial Visual Inspection
+
+start
+
+partition "1. Data Preparation" {
+  :Load MVTec AD\n(carpet, bottle, metal_nut, transistor, leather);
+  :Build training split\n(normal images + 2 defect types per category);
+  :Build test split\n(clean normal images + all defective images);
+  :Apply ImageNet-C corruptions\n(Gaussian noise, defocus blur,\nbrightness, JPEG compression)\nat severities 1–5 to BOTH\nnormal and defective test images;
+  note right
+    Severity 0 = clean baseline.
+    Class ratio preserved per severity.
+  end note
+  :Load ImageNet-C dataset\n(secondary validation;\npre-trained ResNet-50, no fine-tuning);
+}
+
+partition "2. Model Training" {
+  :Initialise ResNet-50\n(ImageNet pre-trained weights);
+  :Fine-tune for binary classification\n(normal vs. defective)\nper MVTec AD category separately;
+  note right
+    Optimiser: Adam
+    LR backbone: 1e-5
+    LR head: 1e-4
+    Loss: cross-entropy
+    Early stopping: patience 10 (val F1)
+    Augmentation: flip, ±10° rotation, colour jitter
+  end note
+}
+
+partition "3. Inference Stream" {
+  :Order test images by increasing\ncorruption severity (sev 0 → sev 5);
+  :Run ResNet-50 inference;\nCollect predictions + confidence scores;
+  note right
+    True labels arrive with\na one-batch delay.
+  end note
+}
+
+partition "4. Drift Detection" {
+  fork
+    :DDM\n(error rate bounds);
+  fork again
+    :EDDM\n(inter-error distance);
+  fork again
+    :ADWIN\n(adaptive window, δ=0.002);
+  fork again
+    :MDDM\n(weighted window, size=100);
+  end fork
+  note right
+    All four detectors run in parallel\non the same binary error signal.\nSeverity transitions = injected drift events.\nDetection latency measured from\nfirst image of new severity level.
+  end note
+  :Naive baseline\n(rolling accuracy monitor,\nthreshold 80%, window 500);
+  if (Any detector raises alarm?) then (yes)
+    :Trigger XAI window analysis;
+  else (no)
+    :Continue stream;
+  endif
+}
+
+partition "5. Anomaly Detection Evaluation" {
+  :Compute AUROC at each\nseverity level per category;
+  :Compute AUPR\n(precision-recall; accounts for class imbalance);
+  :Compute pixel-level AUROC\n(Grad-CAM heatmap vs.\nground-truth defect mask);
+  :Compute anomaly separability gap\n(AUROC sev 0 − AUROC sev 5);
+  note right
+    Grad-CAM heatmaps bilinearly upsampled
+    to original resolution, normalised to [0,1].
+  end note
+}
+
+partition "6. XAI Attribution Analysis" {
+  :For each severity level:\nDraw 50 random defective images;
+  fork
+    partition "Grad-CAM" {
+      :Compute per-image heatmaps\n(final conv layer);
+      :Average heatmaps per window\n(pre-drift vs. post-drift);
+      :Visualise change map;
+      :Compute ADA score\n(IoU: top-20% Grad-CAM pixels\nvs. ground-truth defect mask)\nper severity → ADA curve;
+    }
+  fork again
+    partition "SHAP (KernelSHAP)" {
+      :Compute superpixel-level SHAP\nvalues (50 images per window);
+      :Two-sample KS-test\n(pre vs. post window,\nα = 0.05);
+    }
+  fork again
+    partition "LIME" {
+      :Compute superpixel importance\nweights (50 images per window);
+      :Calculate top-5 superpixel\noverlap coefficient\n(pre vs. post window);
+    }
+  end fork
+  note right
+    ADA = |M_GradCAM ∩ M_defect| / |M_GradCAM ∪ M_defect|
+    Declining ADA = attention shifted to corruption artifacts.
+  end note
+}
+
+partition "7. Secondary Validation (ImageNet-C)" {
+  :Stream ImageNet-C at increasing severity\n(sev 1–5, one corruption type at a time);
+  :Run pre-trained ResNet-50 (no fine-tuning);
+  :Evaluate same drift detectors\nand XAI methods;
+  :Compare corruption sensitivity:\nfine-tuned industrial model\nvs. general-purpose ImageNet model;
+}
+
+partition "8. Output" {
+  :Performance tables\n(AUROC / AUPR per severity per category);
+  :Pixel-level AUROC table\n(per category: clean vs. sev 5);
+  :ADA curves\n(per category, per corruption type);
+  :Drift detector comparison table\n(latency / FPR / TPR per severity transition);
+  :XAI attribution stability table\n(severity of first significant shift\nper method and category);
+}
+
+stop
+@enduml
