@@ -12,9 +12,9 @@ This thesis sits at the intersection of two research areas that have, until fair
 \section{Problem Statement}%
 \label{sec:probleemstelling}
 
-Over the past decade, deep learning models have found their way into industrial settings at a pace that has outrun the supporting infrastructure for keeping them healthy over time. Automated visual inspection is a clear example: it has been widely adopted across electronics manufacturing, food processing, automotive components, and more. Yet the deployment pattern, as \textcite{Radhakrishnan2020} point out, tends to be the same almost everywhere. Train once, validate on a static dataset, deploy, and move on. There is rarely a robust mechanism for monitoring what happens afterward.
+Over the past decade, deep learning models have found their way into industrial settings at a pace the supporting monitoring infrastructure has not matched. Automated visual inspection is a clear example: it has been widely adopted across electronics manufacturing, food processing, automotive components, and more. Yet the deployment pattern, as \textcite{Radhakrishnan2020} point out, tends to be the same almost everywhere. Train once, validate on a static dataset, deploy, and move on. There is rarely a robust mechanism for monitoring what happens afterward.
 
-The specific problem this thesis addresses is the absence of operationally practical pipelines that both \textit{detect} model degradation in image-based inspection systems and \textit{explain} the nature of that degradation to the engineers who have to decide what to do about it. Simple performance monitoring (watching whether accuracy dips below some threshold) is slow and tends to be uninformative. It tells you that something has gone wrong. It does not tell you where to look or what changed.
+The specific problem this thesis addresses is the lack of practical pipelines that both \textit{detect} model degradation in image-based inspection systems and \textit{explain} the nature of that degradation to the engineers who have to decide what to do about it. Simple performance monitoring (watching whether accuracy dips below some threshold) is slow and tends to be uninformative. It tells you that something has gone wrong. It does not tell you where to look or what changed.
 
 The intended audience here is ML engineers and reliability teams running visual inspection pipelines in manufacturing. These are people who understand model architectures and deployment infrastructure well enough. What they often lack is actionable diagnostics: something more specific than a dropped accuracy score.
 
@@ -32,16 +32,16 @@ This breaks down into several more specific questions:
 \begin{itemize}
   \item How does model degradation manifest in CNN-based industrial defect detection?
   \item Which drift-detection algorithms offer the best trade-off between detection latency and false positive rate for image classification pipelines?
-  \item Which XAI methods produce the most actionable explanations when a drift event is detected?
+  \item Which XAI methods produce the clearest explanations when a drift event is detected?
   \item Do the findings generalise beyond industrial inspection to other image-domain scenarios, such as simulated camera corruption?
 \end{itemize}
 
 \section{Research Objective}%
 \label{sec:onderzoeksdoelstelling}
 
-The concrete output of this thesis is a reproducible pipeline, implemented in Python, that integrates a trained CNN with a suite of drift detectors and XAI methods. Two datasets are used for evaluation: the MVTec Anomaly Detection Dataset~\autocite{Bergmann2019} as the primary industrial inspection case, and ImageNet-C~\autocite{Hendrycks2019} as a secondary validation covering simulated sensor and camera degradation.
+The concrete output of this thesis is a reproducible Python pipeline that integrates a trained CNN with a suite of drift detectors and XAI methods. Two datasets are used for evaluation: the MVTec Anomaly Detection Dataset~\autocite{Bergmann2019} as the primary industrial inspection case, and ImageNet-C~\autocite{Hendrycks2019} as a secondary validation set for simulated sensor and camera degradation.
 
-Three criteria define success. First, at least one drift detector should consistently identify degradation earlier than a naive accuracy-threshold baseline. Second, XAI attributions should shift in a statistically meaningful way around detected drift events. Third, the pipeline should give a practitioner enough information to distinguish between different causes of degradation without going back to re-examine raw image data manually.
+At least one drift detector should consistently identify degradation earlier than a naive accuracy-threshold baseline. XAI attributions should shift in a statistically meaningful way around detected drift events. The pipeline should give a practitioner enough information to distinguish between different causes of degradation without re-examining raw image data manually.
 
 \section{Structure of This Thesis}%
 \label{sec:opzet-bachelorproef}

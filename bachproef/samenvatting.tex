@@ -10,7 +10,5 @@ This thesis investigates whether drift-detection algorithms and Explainable AI (
 
 The experimental work is structured in three phases. A ResNet-50 is first fine-tuned as a binary defect classifier on MVTec AD. Four drift detectors (DDM, EDDM, ADWIN, and MDDM) are then woven into the inference pipeline to track shifts in the error distribution over sliding windows. Finally, XAI methods (LIME, SHAP, and Grad-CAM) are applied to windows around detected drift events to identify which visual features actually changed.
 
-The results point clearly in a few directions. ADWIN achieves the shortest detection latency, while EDDM produces the fewest false positives. Of the three XAI methods, Grad-CAM is the most immediately interpretable for visualising how the model's attention shifts, whereas SHAP offers a more quantifiable account of attribution change. Together, the combined pipeline substantially reduces time-to-intervention compared to a naive accuracy-threshold monitor. The findings also hold up on the ImageNet-C corruption scenarios.
-
 The main contribution is a reproducible detection-and-explanation pipeline, along with practical guidelines aimed at ML engineers and reliability teams working with visual inspection systems in production settings.
 

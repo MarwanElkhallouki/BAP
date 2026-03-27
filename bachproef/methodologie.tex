@@ -143,11 +143,11 @@ Three sets of attributions are computed for each window:
 
 \begin{enumerate}
   \item \textbf{Grad-CAM}: A heatmap is generated for each image and the per-pixel activation values are averaged across the window. The difference between the two averaged heatmaps is visualised as a change map.
-  \item \textbf{SHAP (KernelSHAP)}: Superpixel-level SHAP values are computed for a stratified random sample of 50 images per window. The mean absolute SHAP value per superpixel is compared between windows using a two-sample Kolmogorov--Smirnov test, with statistical significance at $\alpha = 0.05$.
+  \item \textbf{SHAP (KernelSHAP)}: Superpixel-level SHAP values are computed for a stratified random sample of 50 images per window. The mean absolute SHAP value per superpixel is compared between windows using a two-sample Kolmogorov--Smirnov test at significance level $\alpha = 0.05$.
   \item \textbf{LIME}: Superpixel importance weights are computed for the same 50-image sample. The top-5 most important superpixels per image are identified, and the overlap coefficient between the top-5 sets across pre- and post-drift windows is calculated.
 \end{enumerate}
 
-Each method brings something different. Grad-CAM produces spatial heatmaps that an operator can read at a glance; SHAP and LIME yield quantitative scores that engineers can track over time. A reliability team is rarely homogeneous (some people want a picture, others want a number), and the pipeline is designed to serve both.
+Each method provides a different type of output. Grad-CAM produces spatial heatmaps that an operator can read at a glance; SHAP and LIME yield quantitative scores that engineers can track over time. A reliability team is rarely homogeneous (some people want a picture, others want a number), and the pipeline is designed to serve both.
 
 Beyond the alarm-triggered comparison, an additional XAI analysis compares attribution maps at the clean baseline (severity 0) against each corruption severity level in isolation. For each severity, the mean Grad-CAM heatmap is computed over 50 randomly drawn defective images and set against the mean clean-image heatmap. The Attribution-to-Defect Alignment (ADA) score (defined in Section~\ref{sec:evaluation}) is then calculated at each severity level using the ground-truth pixel masks provided with MVTec AD, producing a per-severity ADA curve that directly measures whether the model is still attending to actual defect regions or has begun tracking corruption artefacts instead.
 

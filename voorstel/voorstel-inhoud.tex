@@ -66,7 +66,7 @@ Voor dit onderzoek zal er gebruik gemaakt worden van twee verschillende datasets
 Er zijn verschillende types drift die zich kunnen voordoen in data-distributies, waaronder covariante drift, label drift en concept drift \autocite{Bayram2022}. Covariante drift is een verandering in de verdeling van de inputdata, terwijl label drift verwijst naar een verandering in de verdeling van de ouput labels. Concept drift is een verandering van beide de inputdata en de output labels. Elk van deze types hebben een andere impact op de conclusies die moeten worden getrokken uit de data.
 
 \subsection{Driftdetectie-algoritmen}
-Driftdetectie-algoritmen zoals MDDM \autocite{Pesaranghader2017} en EDDM \autocite{baena2006early} zijn beide ontwikkeld om een verandering in data-distributie op te sporen die kan leiden tot modeldegradatie. Deze algoritmen bekijken de prestatie van het model in real-time en signaleren wanneer er een discrepantie is tussen de verwachte en werkelijke prestatie vertoont.
+Driftdetectie-algoritmen zoals MDDM \autocite{Pesaranghader2018} en EDDM \autocite{baena2006early} zijn beide ontwikkeld om een verandering in data-distributie op te sporen die kan leiden tot modeldegradatie. Deze algoritmen bekijken de prestatie van het model in real-time en signaleren wanneer er een discrepantie is tussen de verwachte en werkelijke prestatie vertoont.
 
 \subsection{Driftdetectie-types}
 Er zijn verschillende fundamenteel verschillende soorten driftdetectie onder concept drift detectie \autocite{Bayram2022}. De belangerijkste zijn: data-distributie gebaseerde detectie, prestatie gebaseerde detectie, meerdere hypothese gebaseerde detectie en context gebaseerde detectie. Omdat context gebaseerde detectie buiten de scope van dit onderzoek valt, zal de focus liggen op de eerste drie types.
@@ -102,7 +102,7 @@ Daarnaast zijn er ook Explainable AI (XAI) technieken zoals LIME \autocite{garre
 Door het gebruik van verschillende datasets zoals ImageNet-C \autocite{Hendrycks2019} voor computer vision (CV) en CMAPSS (NASA) \autocite{Saxena2008} voor predictive maintenance, zal er gebruik gemaakt worden van verschillende modellen die representatief zijn voor deze domeinen. Voor CV zal er gebruik gemaakt worden van convolutionele neurale netwerken (CNN's). Voor predictive maintenance zal er gebruik gemaakt worden van RNN's en LSTM's.
 
 \subsection{Implementatie}
-Verschillende driftdetectie-algoritmen zoals MDDM \autocite{Pesaranghader2017}, EDDM \autocite{baena2006early}, etc., zullen worden gebruikt om de veranderingen in de data-distributie te detecteren. Deze modellen zullen worden gebruikt om in real-time de degradatie te detecteren.
+Verschillende driftdetectie-algoritmen zoals MDDM \autocite{Pesaranghader2018}, EDDM \autocite{baena2006early}, etc., zullen worden gebruikt om de veranderingen in de data-distributie te detecteren. Deze modellen zullen worden gebruikt om in real-time de degradatie te detecteren.
 
 \subsection{Integratie van XAI technieken}
 De gekozen XAI technieken zoals LIME \autocite{garreau2020explaining}, SHAP \autocite{VandenBroeck2022}, etc., zullen worden geïntegreerd om inzicht te geven in de ervaren drift. Dit zal helpen bij het ondervinden van de oorzaken van modeldegradatie.

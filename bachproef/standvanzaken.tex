@@ -11,9 +11,9 @@ The literature covered here underpins the research from several directions. It b
 \section{Model Degradation and the Drift Problem}
 \label{sec:modeldegradation}
 
-Any machine learning model is a function fit to a particular distribution of data. When that distribution shifts (and in the real world, it almost always does eventually) performance degrades. The phenomenon is well-documented under a range of names: dataset shift, distributional shift, and most broadly, concept drift~\autocite{Bayram2022}.
+Any machine learning model is a function fit to a particular distribution of data. When that distribution shifts, performance degrades. The phenomenon is well-documented under a range of names: dataset shift, distributional shift, and most broadly, concept drift~\autocite{Bayram2022}.
 
-\textcite{Bayram2022} offer a comprehensive taxonomy here, distinguishing between degradation driven by changes in the input distribution, changes in the relationship between inputs and outputs, and combinations of both. Their review, published in \textit{Knowledge-Based Systems}, covers the theoretical foundations alongside the practical detection strategies that have emerged in response to these challenges.
+\textcite{Bayram2022} offer a comprehensive taxonomy here, distinguishing between degradation driven by changes in the input distribution, changes in the relationship between inputs and outputs, and combinations of both. Their review covers the theoretical foundations alongside the practical detection strategies that have emerged in response to these challenges.
 
 The consequences of missing degradation depend heavily on the application. In a low-stakes recommendation system, a slow accuracy drop might go unnoticed for weeks without causing serious harm. Industrial visual inspection is a different matter entirely. A defect classifier that starts missing surface cracks (or, just as problematically, flagging acceptable products as defective) has immediate operational consequences: quality issues reach customers, or the production line halts unnecessarily. \textcite{Radhakrishnan2020} identify the absence of robust post-deployment monitoring as one of the primary factors holding back broader organisational adoption of AI. That observation sits close to the centre of the motivation for this work.
 
@@ -33,7 +33,7 @@ Beyond the type of drift, the literature also distinguishes between its temporal
 \section{Drift Detection Algorithms}
 \label{sec:driftdetection}
 
-The practical challenge in drift detection is to monitor a stream of predictions or input data and raise an alarm when the underlying distribution has shifted significantly enough to matter. Four algorithms are considered in this thesis, each representing a meaningfully different methodological stance.
+The practical challenge in drift detection is to monitor a stream of predictions or input data and raise an alarm when the underlying distribution has shifted significantly enough to matter. This thesis examines four algorithms, each representing a meaningfully different methodological stance.
 
 \subsection{DDM: Drift Detection Method}
 
@@ -57,7 +57,7 @@ The adaptive window is the key feature: it removes the need to specify a window 
 
 MDDM~\autocite{Pesaranghader2017} uses McDiarmid's inequality to bound the deviation of a weighted sliding-window mean from its maximum observed value. More recent predictions receive higher weights, which makes the method more responsive to sharp recent changes while remaining somewhat more tolerant of isolated outliers. In empirical comparisons across synthetic and real-world data streams, MDDM has shown shorter detection delays and lower false-negative rates than several competing approaches~\autocite{Pesaranghader2017}.
 
-For image-based inspection pipelines, MDDM is an interesting option because the recency weighting aligns naturally with the operational assumption that recent performance is more diagnostic than older error patterns.
+For image-based inspection pipelines, MDDM is a useful option because the recency weighting suits settings where recent performance is more informative than older error patterns.
 
 \subsection{Summary and Selection Rationale}
 
@@ -84,11 +84,11 @@ Table~\ref{tab:detectors} summarises the four detectors. All four monitor classi
 \section{Explainable AI for Image Models}
 \label{sec:xai}
 
-Once a drift detector raises an alarm, the natural follow-up question is: what changed, and where? This is where XAI methods enter the picture. The three techniques applied in this thesis (LIME, SHAP, and Grad-CAM) each offer a different angle on model behaviour and operate at different levels of granularity.
+Once a drift detector raises an alarm, the question is what changed and where. This is where XAI methods enter the picture. The three techniques applied in this thesis (LIME, SHAP, and Grad-CAM) each offer a different angle on model behaviour and operate at different levels of granularity.
 
 \subsection{LIME: Local Interpretable Model-Agnostic Explanations}
 
-LIME, described by \textcite{Ribeiro2016} in their paper ``Why Should I Trust You?'', generates local explanations by approximating how the model behaves in the neighbourhood of a single input. For image inputs, the process involves segmenting the image into superpixels, replacing subsets of those superpixels with a neutral colour, and observing how the model's output shifts in response. A linear model is then fit to these perturbations, yielding importance weights for each superpixel.
+LIME, described by \textcite{Ribeiro2016}, generates local explanations by approximating how the model behaves in the neighbourhood of a single input. For image inputs, the process involves segmenting the image into superpixels, replacing subsets of those superpixels with a neutral colour, and observing how the model's output shifts in response. A linear model is then fit to these perturbations, yielding importance weights for each superpixel.
 
 The main appeal of LIME is that it is model-agnostic: it makes no assumptions about the underlying architecture. The drawback is instability. Because explanations are built on random perturbation sampling, they can vary between runs. \textcite{garreau2020explaining} analyse the convergence conditions for LIME explanations in some depth, and their findings have informed more robust sampling practices.
 
@@ -96,7 +96,7 @@ In the drift monitoring context, LIME is applied to image samples from the windo
 
 \subsection{SHAP: SHapley Additive exPlanations}
 
-\textcite{Lundberg2017} proposed SHAP as a unified framework for model interpretation, grounding it in cooperative game theory. The core idea is that each feature (or, for image inputs, each pixel or superpixel) receives a Shapley value representing its average marginal contribution across all possible subsets of features. What makes this appealing from a theoretical standpoint is that the resulting attributions satisfy a set of axiomatic properties: efficiency, symmetry, and the dummy axiom. Simpler attribution methods often lack this kind of formal grounding. \textcite{VandenBroeck2022} later examined when these computations remain tractable for structured models, which is a non-trivial concern once you move into high-dimensional image inputs.
+\textcite{Lundberg2017} proposed SHAP as a unified framework for model interpretation, grounding it in cooperative game theory. The core idea is that each feature (or, for image inputs, each pixel or superpixel) receives a Shapley value representing its average marginal contribution across all possible subsets of features. What makes this appealing from a theoretical standpoint is that the resulting attributions satisfy a set of axiomatic properties: efficiency, symmetry, and the dummy axiom. Simpler attribution methods often lack this kind of formal grounding. \textcite{VandenBroeck2022} examined the conditions under which these computations remain tractable for structured models, an important consideration for high-dimensional image inputs.
 
 The variant most commonly applied to image models is KernelSHAP. It approximates Shapley values through sampling, using a particular weighting scheme that keeps the estimates consistent with the exact values in expectation. The resulting attribution maps highlight which regions of an image pulled the prediction toward a given class and which pushed against it.
 
@@ -104,7 +104,7 @@ Within the drift pipeline, SHAP attributions are pooled across all samples in a 
 
 \subsection{Grad-CAM: Gradient-weighted Class Activation Mapping}
 
-Grad-CAM~\autocite{Selvaraju2019}, first presented at ICCV 2017, takes a fundamentally different approach from LIME and SHAP. There is no input perturbation, no sampling, no approximation of the model with a simpler surrogate. Instead, Grad-CAM works directly with the model's internals: it computes the gradients of the target class score with respect to the activations of the final convolutional layer, then globally average-pools those gradients to obtain class-discriminative weights. These weights are combined with the corresponding feature maps to produce a coarse spatial heatmap, giving a rough localisation of whichever image regions drove the prediction.
+Grad-CAM~\autocite{Selvaraju2017} takes a fundamentally different approach from LIME and SHAP. There is no input perturbation, no sampling, no approximation of the model with a simpler surrogate. Instead, Grad-CAM works directly with the model's internals: it computes the gradients of the target class score with respect to the activations of the final convolutional layer, then globally average-pools those gradients to obtain class-discriminative weights. These weights are combined with the corresponding feature maps to produce a coarse spatial heatmap, giving a rough localisation of whichever image regions drove the prediction.
 
 For visual inspection tasks, this turns out to be a meaningful practical advantage. The output is a spatially coherent heatmap that can be overlaid directly on the original image, which means an operator does not need to interpret abstract scores or feature importance tables. They can simply look at where the model was looking. If drift is occurring and the model begins attending to irrelevant regions (background texture rather than the product surface itself, say), that shift is visible without any statistical machinery to decode it. This kind of legibility is not a minor convenience; in an industrial setting, it may be what determines whether an operator trusts the system's output or dismisses it.
 
@@ -116,9 +116,9 @@ One constraint worth noting: Grad-CAM is not model-agnostic. It requires access 
 
 \subsection{MVTec Anomaly Detection Dataset}
 
-The MVTec AD dataset was introduced by \textcite{Bergmann2019} at CVPR 2019 and has since become the de facto benchmark for industrial anomaly detection research. Across fifteen product categories, it contains 5,354 images in total (3,629 for training, 1,725 for testing): five texture categories (carpet, grid, leather, tile, wood) and ten object categories (bottle, cable, capsule, hazelnut, metal nut, pill, screw, toothbrush, transistor, zipper).
+The MVTec AD dataset was introduced by \textcite{Bergmann2019} at CVPR 2019 and has since become the standard benchmark for industrial anomaly detection research~\autocite{Ruff2021}. Across fifteen product categories, it contains 5,354 images in total (3,629 for training, 1,725 for testing): five texture categories (carpet, grid, leather, tile, wood) and ten object categories (bottle, cable, capsule, hazelnut, metal nut, pill, screw, toothbrush, transistor, zipper).
 
-The structure of the dataset is worth spelling out clearly. Every category's training split contains only normal, defect-free images with no anomalies whatsoever. The test split then mixes normal images with defective ones, and each defective image comes with a pixel-level ground truth mask. What makes MVTec AD particularly useful here is the genuine variety of defect types it covers: scratches, dents, contaminations, structural deformations, colour anomalies and more. That diversity matters because it provides a natural way to simulate concept drift. Some defect types can be shown to the model during training, and others withheld entirely, then introduced later as if they were newly emerging fault patterns.
+Every category's training split contains only normal, defect-free images with no anomalies whatsoever. The test split then mixes normal images with defective ones, and each defective image comes with a pixel-level ground truth mask. What makes MVTec AD particularly useful here is the genuine variety of defect types it covers: scratches, dents, contaminations, structural deformations, colour anomalies and more. That diversity matters because it provides a natural way to simulate concept drift. Some defect types can be shown to the model during training, and others withheld entirely, then introduced later as if they were newly emerging fault patterns.
 
 That is, in fact, exactly how the dataset is used in this thesis, which departs from the standard unsupervised framing. Rather than restricting training to normal images alone, a supervised binary classifier is trained on a split that includes both normal images and a selected subset of defect categories. The remaining defect types are held out and introduced progressively during the drift simulation. The intention is to approximate what might plausibly happen on a real production line, where a model trained and validated under one distribution of defects gradually encounters fault modes it has never seen before.
 
@@ -126,7 +126,7 @@ That is, in fact, exactly how the dataset is used in this thesis, which departs 
 
 ImageNet-C, introduced by \textcite{Hendrycks2019}, applies fifteen types of algorithmically generated corruptions to the ImageNet validation set, each at five severity levels. The corruption types span noise (Gaussian, shot, impulse), blur (defocus, glass, motion, zoom), weather (frost, fog, brightness, snow), and digital distortions (contrast, elastic, pixelate, JPEG). Each combination of corruption type and severity constitutes a separate sub-dataset.
 
-Here, ImageNet-C serves as a secondary validation case. Corruptions are introduced incrementally (severity levels 1 through 5) to simulate the kind of gradual camera sensor degradation that accumulates over time in a real installation. A pre-trained ResNet-50 (trained on clean ImageNet) is monitored using the same drift detectors applied to MVTec AD, enabling a comparison of detector behaviour across two qualitatively different kinds of distribution shift: a domain-specific industrial inspection scenario and a more general camera-degradation scenario.
+Here, ImageNet-C serves as a secondary validation dataset. Corruptions are introduced incrementally (severity levels 1 through 5) to simulate the kind of gradual camera sensor degradation that accumulates over time in a real installation. A pre-trained ResNet-50 (trained on clean ImageNet) is monitored using the same drift detectors applied to MVTec AD, enabling a comparison of detector behaviour across two qualitatively different kinds of distribution shift: a domain-specific industrial inspection scenario and a more general camera-degradation scenario.
 
 %%============================================================================
 \section{Related Work}
