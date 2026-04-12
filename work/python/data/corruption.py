@@ -1,4 +1,4 @@
-"""Helpers for applying ImageNet-C corruptions via the imagecorruptions library.
+"""Helpers for applying ImageNet-C corruptions via the local robustness/ImageNet-C package.
 
 Usage:
     fn = make_corruption_fn("gaussian_noise", severity=3)
@@ -10,6 +10,14 @@ Stream ordering (per thesis §3.2):
 """
 
 from typing import Callable, Generator, Iterable, Tuple
+import sys
+from pathlib import Path
+
+# Use local robustness/ImageNet-C package from the repository.
+ROOT_DIR = Path(__file__).resolve().parents[1]
+IMAGENET_C_SRC = ROOT_DIR.parent / "robustness" / "ImageNet-C" / "imagenet_c"
+if str(IMAGENET_C_SRC) not in sys.path:
+    sys.path.insert(0, str(IMAGENET_C_SRC))
 
 import numpy as np
 from imagenet_c import corrupt

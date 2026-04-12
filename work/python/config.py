@@ -9,11 +9,14 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-DATA_ROOT       = Path("data/raw")
-MVTEC_ROOT      = DATA_ROOT / "mvtec"
-IMAGENET_C_ROOT = DATA_ROOT / "imagenet-c"
-CHECKPOINT_DIR  = Path("checkpoints")
-OUTPUT_DIR      = Path("output")
+DATA_ROOT              = Path("data/raw")
+MVTEC_ROOT             = DATA_ROOT / "mvtec"
+IMAGENET_C_ROOT        = DATA_ROOT / "imagenet-c"
+CORRUPTION_DATASETS    = Path("data/corruption_datasets")  # Phase 1: pre-computed
+CHECKPOINT_DIR         = Path("checkpoints")
+OUTPUT_DIR             = Path("output")
+XAI_CHECKPOINT_DIR     = OUTPUT_DIR / "xai_checkpoints"    # Phase 4: drift detection checkpoints
+MODEL_CHECKPOINT_DIR   = Path("models/checkpoints")        # Phase 6: DINO-V3 fine-tuned weights
 
 # ---------------------------------------------------------------------------
 # MVTec AD
@@ -37,15 +40,38 @@ IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD  = [0.229, 0.224, 0.225]
 
 # ---------------------------------------------------------------------------
-# Corruptions (imagecorruptions / ImageNet-C)
+# Corruptions (imagecorruptions / ImageNet-C) — Phase 1 & Phase 7
 # ---------------------------------------------------------------------------
-CORRUPTION_TYPES = [
+# Pixel-level corruptions (ImageNet-C)
+CORRUPTION_PIXEL_LEVEL = [
     "gaussian_noise",
     "defocus_blur",
     "brightness",
     "jpeg_compression",
 ]
+
+# Geometric transformations (Phase 7: Translations & Big Anomalies)
+CORRUPTION_GEOMETRIC = ["rotation", "translation"]
+
+# Defect-type drift (held-out MVTec defects per category)
+CORRUPTION_DEFECT_TYPE = ["held_out_defects"]
+
+# All corruption types (for iteration)
+CORRUPTION_TYPES = CORRUPTION_PIXEL_LEVEL + CORRUPTION_GEOMETRIC + CORRUPTION_DEFECT_TYPE
+
 CORRUPTION_SEVERITIES = [1, 2, 3, 4, 5]  # severity 0 = clean baseline
+
+# Phase 7: Scale threshold — small vs large corruptions
+SCALE_SMALL_SEVERITY_MAX = 2        # severity 1-2 = small
+SCALE_LARGE_SEVERITY_MIN = 3        # severity 3-5 = large
+GEOMETRIC_SMALL_MAGNITUDE = 0.05    # translation ±5%, rotation ±15° = small
+GEOMETRIC_LARGE_MAGNITUDE = 0.10    # translation ±10%, rotation ±30° = large
+
+# Geometric transform magnitudes (Phase 7)
+ROTATION_SMALL_DEG      = 15.0      # ±15° for small scale
+ROTATION_LARGE_DEG      = 30.0      # ±30° for large scale
+TRANSLATION_SMALL_FRAC  = 0.05      # ±5% of image dimensions
+TRANSLATION_LARGE_FRAC  = 0.10      # ±10% of image dimensions
 
 # ---------------------------------------------------------------------------
 # Model training
@@ -59,43 +85,45 @@ MAX_EPOCHS              = 50
 VAL_SPLIT               = 0.20             # fraction of train set used for validation
 
 # ---------------------------------------------------------------------------
-# Drift detectors (River defaults from original publications)
+# Drift detectors — Phase 5: ADWIN + DDM only (removed EDDM, MDDM, Naive)
 # ---------------------------------------------------------------------------
 DDM_WARNING_THRESHOLD = 2.0    # ~95 % confidence
 DDM_DRIFT_THRESHOLD   = 3.0    # ~99 % confidence
-EDDM_ALPHA            = 0.95   # warning threshold
-EDDM_BETA             = 0.90   # drift threshold
 ADWIN_DELTA           = 0.002
-MDDM_WINDOW_SIZE      = 100
-
-# Naive rolling-accuracy baseline
-BASELINE_WINDOW_SIZE       = 500
-BASELINE_ACCURACY_FRACTION = 0.80  # alarm when accuracy < 80 % of train accuracy
 
 # Detection tolerance window for TPR calculation
 DETECTION_TOLERANCE_WINDOW = 500  # samples
 
 # ---------------------------------------------------------------------------
-# XAI
+# XAI — Phase 5: Grad-CAM + LIME only (removed SHAP)
 # ---------------------------------------------------------------------------
 XAI_PRE_DRIFT_WINDOW  = 200    # images before alarm
 XAI_POST_DRIFT_WINDOW = 200    # images after alarm
-XAI_SAMPLE_SIZE       = 20     # images used for SHAP / LIME
+XAI_SAMPLE_SIZE       = 20     # images used for LIME; Grad-CAM on all
 
 GRADCAM_TOP_PERCENTILE       = 80   # binarise at 80th percentile → top-20 % activated
-SHAP_SIGNIFICANCE_LEVEL      = 0.05
 LIME_TOP_K_SUPERPIXELS       = 5
 LIME_OVERLAP_SHIFT_THRESHOLD = 0.50  # overlap < 0.5 → substantial attribution shift
+LIME_N_PERTURBATIONS         = 256   # perturbation samples (can reduce to 128-150 for speed)
 
-# Number of SHAP/LIME perturbation samples
-SHAP_N_PERTURBATIONS = 50
-LIME_N_PERTURBATIONS = 256
-
-# GPU inference chunk size for SHAP/LIME perturbation batches
+# GPU inference chunk size for LIME perturbation batches
 # 8 for 4 GB cards, 32 for 12 GB cards (RTX 3060+)
 XAI_CHUNK_SIZE = 32
+
+# Phase 4: Checkpoint persistence
+SAVE_XAI_CHECKPOINTS        = True   # save drift detection state before XAI analysis
+ENABLE_XAI_ONLY_MODE        = True   # support run_xai_only.py for decoupled XAI
 
 # If True, each detector is disabled after its first alarm and XAI runs exactly once per
 # detector. The stream ends early once all detectors have fired.
 # If False, detectors run continuously and XAI is throttled by XAI_POST_DRIFT_WINDOW.
 DISABLE_DETECTOR_AFTER_ALARM = True
+
+# ---------------------------------------------------------------------------
+# Phase 6: DINO-V3 Integration (Approach A: Feature Distribution Shift)
+# ---------------------------------------------------------------------------
+USE_DINO_FEATURE_DRIFT = True              # enable DINO feature extraction alongside error signal
+DINO_MODEL_NAME        = "dinov2_vits14"   # small ViT model (14 patch size); fast & low-mem
+DINO_FEATURE_REDUCTION = "mean"            # pool features to (384,) vector
+DINO_FEATURE_DISTANCE  = "cosine"          # distance metric for distribution shift
+DINO_CHECKPOINT_PATH   = MODEL_CHECKPOINT_DIR / "dino_finetuned"

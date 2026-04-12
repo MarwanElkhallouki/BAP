@@ -29,13 +29,24 @@ from config import (
     XAI_POST_DRIFT_WINDOW,
     XAI_PRE_DRIFT_WINDOW,
     XAI_SAMPLE_SIZE,
+    SAVE_XAI_CHECKPOINTS,
+    USE_DINO_FEATURE_DRIFT,
+    OUTPUT_DIR,
 )
 from data.mvtec import load_defect_mask
 from drift.detectors import make_all_detectors
 from evaluation.metrics import DetectorResult, classify_alarms
 from xai.gradcam import compute_gradcam, compute_ada, mean_heatmap, change_map
 from xai.lime_analysis import compute_lime_top_k, overlap_coefficient
-from xai.shap_analysis import compute_shap_values, ks_test
+from checkpoint.xai_checkpoint import XAICheckpoint, save_xai_checkpoint, checkpoint_filename
+
+# Phase 6: Optional DINO feature extraction
+if USE_DINO_FEATURE_DRIFT:
+    try:
+        from models.dino import DINOFeatureExtractor
+    except ImportError:
+        logger.warning("DINO not available; disabling DINO features")
+        USE_DINO_FEATURE_DRIFT = False
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +56,10 @@ class AlarmEvent:
     detector_name: str
     sample_index:  int
     severity:      int
+    drift_type: str = "unknown"                # Phase 7: "corruption", "defect", "geometric"
+    scale: str = None                          # Phase 7: "small", "large", or None
     xai: dict = field(default_factory=dict)   # populated after XAI analysis
+    checkpoint_path: str = None                # Phase 4: path to saved checkpoint
 
 
 @dataclass
@@ -57,6 +71,9 @@ class StreamRecord:
     score:      float          # defective-class confidence
     severity:   int
     path:       str
+    dino_feature: np.ndarray = None  # Phase 6: optional DINO feature vector
+    drift_type: str = "unknown"      # Phase 7: from stream metadata
+    scale: str = None                # Phase 7: from stream metadata
 
 
 class Pipeline:
@@ -67,11 +84,13 @@ class Pipeline:
         transform,
         train_accuracy: float,
         category:       str,
+        corruption_type: str = None,  # Phase 1: from pre-computed dataset
     ):
         self.model    = model
         self.device   = device
         self.transform = transform
         self.category = category
+        self.corruption_type = corruption_type or "unknown"
 
         self.detectors = make_all_detectors(train_accuracy)
         self.det_results: dict[str, DetectorResult] = {
@@ -84,12 +103,29 @@ class Pipeline:
         # Rolling buffer (kept to avoid unbounded memory growth)
         self._buffer: list[StreamRecord] = []
         self._buffer_cap = XAI_PRE_DRIFT_WINDOW + XAI_POST_DRIFT_WINDOW + 50
+        
+        # Phase 6: DINO feature extractor (optional)
+        self.dino_extractor = None
+        if USE_DINO_FEATURE_DRIFT:
+            try:
+                from models.dino import DINOFeatureExtractor
+                self.dino_extractor = DINOFeatureExtractor(device=device)
+                logger.info("DINO feature extractor initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize DINO extractor: {e}")
+        
+        # Phase 4: Checkpoint counter
+        self._alarm_counter = 0
 
     # ------------------------------------------------------------------
     # Inference
     # ------------------------------------------------------------------
     @torch.no_grad()
-    def _infer(self, img_np: np.ndarray) -> tuple[int, float]:
+    def _infer(self, img_np: np.ndarray) -> tuple[int, float, np.ndarray]:
+        """Inference + optional DINO feature extraction.
+        
+        Returns: (prediction, confidence, dino_feature_or_None)
+        """
         self.model.eval()
         from PIL import Image as _PIL
         img_pil = _PIL.fromarray(img_np) if isinstance(img_np, np.ndarray) else img_np
@@ -97,12 +133,22 @@ class Pipeline:
         probs  = F.softmax(self.model(tensor), dim=1).squeeze()
         pred   = int(probs.argmax().item())
         score  = float(probs[1].item())   # confidence for defective class
-        return pred, score
+        
+        # Phase 6: Optional DINO feature
+        dino_feat = None
+        if self.dino_extractor is not None:
+            try:
+                dino_feat = self.dino_extractor.extract(img_np)
+            except Exception as e:
+                logger.warning(f"DINO extraction failed: {e}")
+        
+        return pred, score, dino_feat
 
     # ------------------------------------------------------------------
     # XAI (triggered on alarm)
     # ------------------------------------------------------------------
     def _xai_window(self, alarm_buf_idx: int) -> dict:
+        """Phase 5: Compute XAI analysis (Grad-CAM + LIME only; removed SHAP for speed)."""
         pre_start = max(0, alarm_buf_idx - XAI_PRE_DRIFT_WINDOW)
         pre_recs  = self._buffer[pre_start:alarm_buf_idx]
         post_recs = self._buffer[alarm_buf_idx: alarm_buf_idx + XAI_POST_DRIFT_WINDOW]
@@ -117,32 +163,26 @@ class Pipeline:
                 for r in recs
             ]).to(self.device)
 
-        # Limit to XAI_SAMPLE_SIZE for all methods (SHAP/LIME already cap internally)
+        # Limit to XAI_SAMPLE_SIZE for LIME
         pre_sample  = pre_recs[-XAI_SAMPLE_SIZE:]
         post_sample = post_recs[:XAI_SAMPLE_SIZE]
         pre_imgs    = [r.image_np for r in pre_sample]
         post_imgs   = [r.image_np for r in post_sample]
 
-        # --- Grad-CAM ---
+        # --- Grad-CAM (Phase 5: fast, no perturbations) ---
         pre_cam  = compute_gradcam(self.model, to_tensors(pre_sample),  1, self.device)
         torch.cuda.empty_cache()
         post_cam = compute_gradcam(self.model, to_tensors(post_sample), 1, self.device)
         torch.cuda.empty_cache()
         cam_change = change_map(mean_heatmap(pre_cam), mean_heatmap(post_cam))
 
-        # --- SHAP ---
-        pre_shap  = compute_shap_values(self.model, pre_imgs,  self.transform, self.device)
-        post_shap = compute_shap_values(self.model, post_imgs, self.transform, self.device)
-        shap_ks   = ks_test(pre_shap, post_shap)
-
-        # --- LIME ---
+        # --- LIME (Phase 5: reduce perturbations if needed) ---
         pre_lime  = compute_lime_top_k(self.model, pre_imgs,  self.transform, self.device)
         post_lime = compute_lime_top_k(self.model, post_imgs, self.transform, self.device)
         lime_ovlp = overlap_coefficient(pre_lime, post_lime)
 
         return {
             "gradcam_change_map":       cam_change,
-            "shap_ks_test":             shap_ks,
             "lime_overlap_coefficient": lime_ovlp,
         }
 
@@ -180,16 +220,30 @@ class Pipeline:
         pbar = tqdm(stream, desc=f"[{self.category}] streaming",
                     total=stream_len, position=1, leave=False)
 
-        for sample_idx, (img_np, label, severity, path) in enumerate(pbar):
+        for sample_idx, sample_data in enumerate(pbar):
+            # Phase 1/7: Stream now includes metadata (drift_type, scale)
+            if len(sample_data) == 6:
+                img_np, label, severity, path, drift_type, scale = sample_data
+            else:
+                # Backwards compatibility: old format (img_np, label, severity, path)
+                img_np, label, severity, path = sample_data
+                drift_type, scale = "unknown", None
+            
             _t0 = time.perf_counter()
-            pred, score = self._infer(img_np)
+            pred, score, dino_feat = self._infer(img_np)  # Phase 6: DINO features
             _t_infer += time.perf_counter() - _t0
             _n_infer += 1
             if global_pbar is not None:
                 global_pbar.update(1)
             error = int(pred != label)
 
-            rec = StreamRecord(img_np, label, pred, score, severity, path)
+            # Phase 7: Include drift type and scale metadata
+            rec = StreamRecord(
+                img_np, label, pred, score, severity, path,
+                dino_feature=dino_feat,
+                drift_type=drift_type,
+                scale=scale,
+            )
             self._buffer.append(rec)
             if len(self._buffer) > self._buffer_cap:
                 self._buffer.pop(0)
@@ -216,6 +270,8 @@ class Pipeline:
                         detector_name=det.name,
                         sample_index=sample_idx,
                         severity=severity,
+                        drift_type=drift_type,
+                        scale=scale,
                     )
                     if DISABLE_DETECTOR_AFTER_ALARM:
                         if buf_idx >= XAI_PRE_DRIFT_WINDOW // 2:
@@ -224,6 +280,49 @@ class Pipeline:
                                 alarm.xai = self._xai_window(buf_idx)
                                 _t_xai += time.perf_counter() - _t0_xai
                                 _n_xai  += 1
+                                
+                                # Phase 4: Save checkpoint before XAI
+                                if SAVE_XAI_CHECKPOINTS:
+                                    try:
+                                        pre_recs = self._buffer[max(0, buf_idx - XAI_PRE_DRIFT_WINDOW):buf_idx]
+                                        post_recs = self._buffer[buf_idx:buf_idx + XAI_POST_DRIFT_WINDOW]
+                                        
+                                        pre_samples = [{
+                                            "image_np": r.image_np, "prediction": r.prediction, 
+                                            "confidence": r.score, "label": r.label, "path": r.path
+                                        } for r in pre_recs[-XAI_SAMPLE_SIZE:]]
+                                        
+                                        post_samples = [{
+                                            "image_np": r.image_np, "prediction": r.prediction,
+                                            "confidence": r.score, "label": r.label, "path": r.path
+                                        } for r in post_recs[:XAI_SAMPLE_SIZE]]
+                                        
+                                        ckpt = XAICheckpoint(
+                                            detector_name=det.name,
+                                            sample_index=sample_idx,
+                                            drift_type=drift_type,
+                                            scale=scale,
+                                            category=self.category,
+                                            corruption_type=self.corruption_type,
+                                            severity=severity,
+                                            model_state_dict=self.model.state_dict(),
+                                            pre_drift_samples=pre_samples,
+                                            post_drift_samples=post_samples,
+                                        )
+                                        
+                                        ckpt_name = checkpoint_filename(
+                                            self.category,
+                                            self.corruption_type,
+                                            det.name,
+                                            self._alarm_counter,
+                                        )
+                                        ckpt_path = OUTPUT_DIR / "xai_checkpoints" / ckpt_name
+                                        save_xai_checkpoint(ckpt, ckpt_path)
+                                        alarm.checkpoint_path = str(ckpt_path)
+                                        self._alarm_counter += 1
+                                    except Exception as exc:
+                                        logger.warning("Checkpoint save failed: %s", exc)
+                                
                             except Exception as exc:
                                 logger.warning("XAI failed: %s", exc)
                         self._disabled_detectors.add(det.name)

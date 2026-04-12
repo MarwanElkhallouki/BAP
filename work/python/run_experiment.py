@@ -54,32 +54,39 @@ def build_stream(
     category: str,
     corruption_type: str,
     data_root: Path,
-) -> tuple[list[tuple[np.ndarray, int, int, str]], list[int]]:
+) -> tuple[list[tuple], list[int]]:
     """Build the ordered sample stream and note drift onset indices.
 
+    Phase 7: Stream now includes (image, label, severity, path, drift_type, scale).
     Stream order: all severity-0 images, then severity-1, …, severity-5.
     Each severity transition is a drift event.
 
     Returns (stream_list, drift_onsets) where drift_onsets[i] is the sample
     index at which severity i+1 begins.
     """
+    from config import SCALE_SMALL_SEVERITY_MAX, SCALE_LARGE_SEVERITY_MIN
+    
     tf = get_transforms(augment=False)
     base_ds = MVTecDataset(data_root, category, split="test", transform=tf)
     samples_clean = _dataset_to_list(base_ds)
 
-    stream: list[tuple[np.ndarray, int, int, str]] = [
-        (img, lbl, 0, path) for img, lbl, path in samples_clean
+    stream: list[tuple] = [
+        (img, lbl, 0, path, "corruption", None) for img, lbl, path in samples_clean
     ]
     drift_onsets: list[int] = []
 
     for sev in CORRUPTION_SEVERITIES:
         drift_onsets.append(len(stream))
         corrupt_fn = make_corruption_fn(corruption_type, sev)
+        
+        # Phase 7: Determine scale
+        scale = "small" if sev <= SCALE_SMALL_SEVERITY_MAX else "large"
+        
         ds = MVTecDataset(data_root, category, split="test",
                           transform=tf, corruption_fn=corrupt_fn)
         for img_tensor, label, path in ds:
             img_np = corrupt_fn(np.array(Image.open(path).convert("RGB")))
-            stream.append((img_np, int(label), sev, path))
+            stream.append((img_np, int(label), sev, path, "corruption", scale))
 
     return stream, drift_onsets
 
@@ -109,6 +116,7 @@ def run_one(category: str, corruption_type: str, global_pbar=None) -> None:
         transform=transform,
         train_accuracy=train_acc,
         category=category,
+        corruption_type=corruption_type,  # Phase 1/4: for checkpoint metadata
     )
 
     alarms, det_results = pipe.run(
@@ -140,10 +148,11 @@ def run_one(category: str, corruption_type: str, global_pbar=None) -> None:
     # --- Alarm details ---
     print(f"\nTotal alarms: {len(alarms)}")
     for a in alarms:
-        shap_sig = a.xai.get("shap_ks_test", {}).get("significant", "—")
+        cam_change = a.xai.get("gradcam_change_map", "—")
         lime_ovlp = a.xai.get("lime_overlap_coefficient", "—")
         print(f"  [{a.detector_name}] sample={a.sample_index}  sev={a.severity}  "
-              f"shap_sig={shap_sig}  lime_overlap={lime_ovlp}")
+              f"drift_type={a.drift_type}  scale={a.scale}  "
+              f"cam_change={'OK' if cam_change != '—' else '—'}  lime_overlap={lime_ovlp}")
 
     # --- Save results ---
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
