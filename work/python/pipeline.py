@@ -1,0 +1,306 @@
+"""Core inference + drift-detection + XAI pipeline (thesis §3.1).
+
+Flow per sample:
+  image → ResNet-50 → prediction → error signal → 5 detectors in parallel
+                                                 ↓ (on alarm)
+                                      XAI analysis on pre/post-drift windows
+
+Usage: instantiate Pipeline, then call .run(stream).
+"""
+
+from __future__ import annotations
+
+import logging
+import random
+from dataclasses import dataclass, field
+from typing import Iterator
+
+import time
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+from tqdm import tqdm
+
+from config import (
+    DETECTION_TOLERANCE_WINDOW,
+    DISABLE_DETECTOR_AFTER_ALARM,
+    MVTEC_ROOT,
+    XAI_POST_DRIFT_WINDOW,
+    XAI_PRE_DRIFT_WINDOW,
+    XAI_SAMPLE_SIZE,
+)
+from data.mvtec import load_defect_mask
+from drift.detectors import make_all_detectors
+from evaluation.metrics import DetectorResult, classify_alarms
+from xai.gradcam import compute_gradcam, compute_ada, mean_heatmap, change_map
+from xai.lime_analysis import compute_lime_top_k, overlap_coefficient
+from xai.shap_analysis import compute_shap_values, ks_test
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class AlarmEvent:
+    detector_name: str
+    sample_index:  int
+    severity:      int
+    xai: dict = field(default_factory=dict)   # populated after XAI analysis
+
+
+@dataclass
+class StreamRecord:
+    """One sample in the rolling buffer."""
+    image_np:   np.ndarray
+    label:      int
+    prediction: int
+    score:      float          # defective-class confidence
+    severity:   int
+    path:       str
+
+
+class Pipeline:
+    def __init__(
+        self,
+        model:          torch.nn.Module,
+        device:         torch.device,
+        transform,
+        train_accuracy: float,
+        category:       str,
+    ):
+        self.model    = model
+        self.device   = device
+        self.transform = transform
+        self.category = category
+
+        self.detectors = make_all_detectors(train_accuracy)
+        self.det_results: dict[str, DetectorResult] = {
+            d.name: DetectorResult(name=d.name) for d in self.detectors
+        }
+        self.alarms: list[AlarmEvent] = []
+        self._disabled_detectors: set[str] = set()   # detectors that have fired once and are done
+        self._xai_last: dict[str, int] = {}           # used when DISABLE_DETECTOR_AFTER_ALARM=False
+
+        # Rolling buffer (kept to avoid unbounded memory growth)
+        self._buffer: list[StreamRecord] = []
+        self._buffer_cap = XAI_PRE_DRIFT_WINDOW + XAI_POST_DRIFT_WINDOW + 50
+
+    # ------------------------------------------------------------------
+    # Inference
+    # ------------------------------------------------------------------
+    @torch.no_grad()
+    def _infer(self, img_np: np.ndarray) -> tuple[int, float]:
+        self.model.eval()
+        from PIL import Image as _PIL
+        img_pil = _PIL.fromarray(img_np) if isinstance(img_np, np.ndarray) else img_np
+        tensor = self.transform(img_pil).unsqueeze(0).to(self.device)
+        probs  = F.softmax(self.model(tensor), dim=1).squeeze()
+        pred   = int(probs.argmax().item())
+        score  = float(probs[1].item())   # confidence for defective class
+        return pred, score
+
+    # ------------------------------------------------------------------
+    # XAI (triggered on alarm)
+    # ------------------------------------------------------------------
+    def _xai_window(self, alarm_buf_idx: int) -> dict:
+        pre_start = max(0, alarm_buf_idx - XAI_PRE_DRIFT_WINDOW)
+        pre_recs  = self._buffer[pre_start:alarm_buf_idx]
+        post_recs = self._buffer[alarm_buf_idx: alarm_buf_idx + XAI_POST_DRIFT_WINDOW]
+
+        if not pre_recs:
+            return {}
+
+        def to_tensors(recs: list[StreamRecord]) -> torch.Tensor:
+            from PIL import Image as _PIL
+            return torch.stack([
+                self.transform(_PIL.fromarray(r.image_np) if isinstance(r.image_np, np.ndarray) else r.image_np)
+                for r in recs
+            ]).to(self.device)
+
+        # Limit to XAI_SAMPLE_SIZE for all methods (SHAP/LIME already cap internally)
+        pre_sample  = pre_recs[-XAI_SAMPLE_SIZE:]
+        post_sample = post_recs[:XAI_SAMPLE_SIZE]
+        pre_imgs    = [r.image_np for r in pre_sample]
+        post_imgs   = [r.image_np for r in post_sample]
+
+        # --- Grad-CAM ---
+        pre_cam  = compute_gradcam(self.model, to_tensors(pre_sample),  1, self.device)
+        torch.cuda.empty_cache()
+        post_cam = compute_gradcam(self.model, to_tensors(post_sample), 1, self.device)
+        torch.cuda.empty_cache()
+        cam_change = change_map(mean_heatmap(pre_cam), mean_heatmap(post_cam))
+
+        # --- SHAP ---
+        pre_shap  = compute_shap_values(self.model, pre_imgs,  self.transform, self.device)
+        post_shap = compute_shap_values(self.model, post_imgs, self.transform, self.device)
+        shap_ks   = ks_test(pre_shap, post_shap)
+
+        # --- LIME ---
+        pre_lime  = compute_lime_top_k(self.model, pre_imgs,  self.transform, self.device)
+        post_lime = compute_lime_top_k(self.model, post_imgs, self.transform, self.device)
+        lime_ovlp = overlap_coefficient(pre_lime, post_lime)
+
+        return {
+            "gradcam_change_map":       cam_change,
+            "shap_ks_test":             shap_ks,
+            "lime_overlap_coefficient": lime_ovlp,
+        }
+
+    # ------------------------------------------------------------------
+    # Main loop
+    # ------------------------------------------------------------------
+    def run(
+        self,
+        stream: Iterator[tuple[np.ndarray, int, int, str]],
+        drift_onsets: list[int] | None = None,
+        stream_len: int | None = None,
+        global_pbar=None,
+    ) -> tuple[list[AlarmEvent], dict[str, DetectorResult]]:
+        """Process the image stream.
+
+        stream:       yields (image_np, label, severity, path)
+        drift_onsets: sample indices at which severity transitions occur
+                      (used to label alarms as TP/FP and compute latency)
+        stream_len:   total number of samples — enables accurate ETA in progress bar
+        """
+        drift_onsets = drift_onsets or []
+
+        _t_infer = 0.0
+        _n_infer = 0
+        _t_xai   = 0.0
+        _n_xai   = 0
+
+        def _fmt(s: float) -> str:
+            s = int(s)
+            h, m = s // 3600, (s % 3600) // 60
+            if h:   return f"{h}h {m:02d}m"
+            if m:   return f"{m}m {s % 60:02d}s"
+            return f"{s}s"
+
+        pbar = tqdm(stream, desc=f"[{self.category}] streaming",
+                    total=stream_len, position=1, leave=False)
+
+        for sample_idx, (img_np, label, severity, path) in enumerate(pbar):
+            _t0 = time.perf_counter()
+            pred, score = self._infer(img_np)
+            _t_infer += time.perf_counter() - _t0
+            _n_infer += 1
+            if global_pbar is not None:
+                global_pbar.update(1)
+            error = int(pred != label)
+
+            rec = StreamRecord(img_np, label, pred, score, severity, path)
+            self._buffer.append(rec)
+            if len(self._buffer) > self._buffer_cap:
+                self._buffer.pop(0)
+
+            buf_idx = len(self._buffer) - 1
+
+            for det in self.detectors:
+                if det.name in self._disabled_detectors:
+                    continue
+                state = det.update(error)
+                if state == "drift":
+                    logger.info(
+                        "[%s] alarm at sample %d (severity=%d)", det.name, sample_idx, severity
+                    )
+                    # Determine if TP/FP and compute latency
+                    onset = next(
+                        (o for o in sorted(drift_onsets, reverse=True) if o <= sample_idx), None
+                    )
+                    is_tp  = onset is not None and (sample_idx - onset) < DETECTION_TOLERANCE_WINDOW
+                    latency = (sample_idx - onset) if (onset is not None and is_tp) else None
+                    self.det_results[det.name].record_alarm(sample_idx, is_tp, latency)
+
+                    alarm = AlarmEvent(
+                        detector_name=det.name,
+                        sample_index=sample_idx,
+                        severity=severity,
+                    )
+                    if DISABLE_DETECTOR_AFTER_ALARM:
+                        if buf_idx >= XAI_PRE_DRIFT_WINDOW // 2:
+                            try:
+                                _t0_xai = time.perf_counter()
+                                alarm.xai = self._xai_window(buf_idx)
+                                _t_xai += time.perf_counter() - _t0_xai
+                                _n_xai  += 1
+                            except Exception as exc:
+                                logger.warning("XAI failed: %s", exc)
+                        self._disabled_detectors.add(det.name)
+                        logger.info("[%s] disabled after first alarm", det.name)
+                    else:
+                        last_xai = self._xai_last.get(det.name, -XAI_POST_DRIFT_WINDOW)
+                        if buf_idx >= XAI_PRE_DRIFT_WINDOW // 2 and (sample_idx - last_xai) >= XAI_POST_DRIFT_WINDOW:
+                            try:
+                                _t0_xai = time.perf_counter()
+                                alarm.xai = self._xai_window(buf_idx)
+                                _t_xai += time.perf_counter() - _t0_xai
+                                _n_xai  += 1
+                                self._xai_last[det.name] = sample_idx
+                            except Exception as exc:
+                                logger.warning("XAI failed: %s", exc)
+                    self.alarms.append(alarm)
+
+            # --- progress bar postfix ---
+            mean_infer = _t_infer / _n_infer
+            mean_xai   = _t_xai / _n_xai if _n_xai else None
+            if DISABLE_DETECTOR_AFTER_ALARM:
+                n_done = len(self._disabled_detectors)
+                n_left = len(self.detectors) - n_done
+                postfix: dict = {"xai": f"{n_done}/{len(self.detectors)}"}
+                if mean_xai is not None:
+                    postfix["xai_avg"] = _fmt(mean_xai)
+                    if stream_len:
+                        eta = (stream_len - sample_idx - 1) * mean_infer + n_left * mean_xai
+                        postfix["ETA"] = _fmt(eta)
+                pbar.set_postfix(postfix, refresh=False)
+            elif mean_xai is not None:
+                pbar.set_postfix({"xai_calls": _n_xai, "xai_avg": _fmt(mean_xai)}, refresh=False)
+
+            if DISABLE_DETECTOR_AFTER_ALARM and len(self._disabled_detectors) >= len(self.detectors):
+                logger.info("All detectors have fired — stopping stream at sample %d", sample_idx)
+                break
+
+        return self.alarms, self.det_results
+
+    # ------------------------------------------------------------------
+    # Post-hoc ADA curve (per-severity, requires MVTec masks)
+    # ------------------------------------------------------------------
+    def compute_ada_curve(self) -> dict[int, float]:
+        """Mean ADA score at each severity over up to XAI_SAMPLE_SIZE defective images."""
+        from xai.gradcam import compute_gradcam, compute_ada
+
+        defective_by_sev: dict[int, list[StreamRecord]] = {}
+        for rec in self._buffer:
+            if rec.label == 1:
+                defective_by_sev.setdefault(rec.severity, []).append(rec)
+
+        ada_curve: dict[int, float] = {}
+        for sev, recs in defective_by_sev.items():
+            chosen = random.sample(recs, min(XAI_SAMPLE_SIZE, len(recs)))
+            scores = []
+            for rec in chosen:
+                mask = load_defect_mask(MVTEC_ROOT, self.category, rec.path)
+                if mask is None:
+                    continue
+                from PIL import Image as _PIL
+                img_pil = _PIL.fromarray(rec.image_np) if isinstance(rec.image_np, np.ndarray) else rec.image_np
+                tensor = self.transform(img_pil).unsqueeze(0)
+                cam = compute_gradcam(self.model, tensor, target_class=1, device=self.device)
+                scores.append(compute_ada(cam[0], mask))
+            if scores:
+                ada_curve[sev] = float(np.mean(scores))
+
+        return ada_curve
+
+    # ------------------------------------------------------------------
+    # AUROC degradation curve
+    # ------------------------------------------------------------------
+    def compute_auroc_curve(self) -> dict[int, float]:
+        from evaluation.metrics import auroc_at_severity
+        labels_by_sev: dict[int, list[int]]   = {}
+        scores_by_sev: dict[int, list[float]] = {}
+        for rec in self._buffer:
+            labels_by_sev.setdefault(rec.severity, []).append(rec.label)
+            scores_by_sev.setdefault(rec.severity, []).append(rec.score)
+        return auroc_at_severity(labels_by_sev, scores_by_sev)

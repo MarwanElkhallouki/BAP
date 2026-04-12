@@ -141,3 +141,14 @@ CLAUDE.md
 
 # Editor files
 **/.auctex-auto/
+
+work/python/data/**/*.png
+*.tar*
+*.zip
+work/extract/*
+work/leather/*
+work/bottle/*
+work/carpet/*
+work/metal_nut/*
+work/transistor/*
+*.pyc
