@@ -14,20 +14,18 @@ Usage:
 import argparse
 import logging
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, Mapping, Optional
 
 import numpy as np
 import torch
-from PIL import Image
 
 from config import (
-    OUTPUT_DIR,
     XAI_CHECKPOINT_DIR,
     XAI_SAMPLE_SIZE,
     LIME_N_PERTURBATIONS,
 )
-from checkpoint.xai_checkpoint import load_xai_checkpoint
-from models.resnet import load_checkpoint
+from checkpoint.xai_checkpoint import XAICheckpoint, load_xai_checkpoint
+from models.resnet import build_model
 from xai.gradcam import compute_gradcam, mean_heatmap, compute_ada
 from xai.lime_analysis import compute_lime_top_k, overlap_coefficient
 
@@ -35,7 +33,30 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def run_xai_analysis(checkpoint_data: Dict, device: torch.device, output_dir: Path):
+def _normalize_state_dict_keys(state_dict: Mapping[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    """Return state dict with any leading DataParallel 'module.' prefixes removed."""
+    normalized: Dict[str, torch.Tensor] = {}
+    for key, value in state_dict.items():
+        normalized[key[7:] if key.startswith("module.") else key] = value
+    return normalized
+
+
+def _load_replay_model(checkpoint_state: Mapping[str, torch.Tensor], device: torch.device) -> torch.nn.Module:
+    """Reconstruct model and load checkpoint weights for XAI replay."""
+    model = build_model(pretrained=False)
+    normalized_state = _normalize_state_dict_keys(checkpoint_state)
+    model.load_state_dict(normalized_state)
+    model.to(device)
+    model.eval()
+    return model
+
+
+def run_xai_analysis(
+    checkpoint_data: XAICheckpoint,
+    device: torch.device,
+    output_dir: Path,
+    lime_perturbations: Optional[int] = None,
+):
     """Perform XAI analysis on checkpoint data.
     
     Args:
@@ -46,28 +67,31 @@ def run_xai_analysis(checkpoint_data: Dict, device: torch.device, output_dir: Pa
     
     # Reconstruct model
     logger.info(f"Loading model for {checkpoint_data.category}...")
-    model = torch.nn.DataParallel(torch.hub.load("pytorch/vision:v0.10.0", "resnet50", pretrained=True))
-    model.module.fc = torch.nn.Linear(2048, 2)
-    model.load_state_dict(checkpoint_data.model_state_dict)
-    model.to(device)
-    model.eval()
+    model = _load_replay_model(checkpoint_data.model_state_dict, device)
     
     # Get samples
     pre_samples = checkpoint_data.pre_drift_samples
     post_samples = checkpoint_data.post_drift_samples
+
+    if not pre_samples or not post_samples:
+        raise ValueError(
+            f"Checkpoint missing replay samples: pre={len(pre_samples)}, post={len(post_samples)}"
+        )
     
     logger.info(f"Pre-drift: {len(pre_samples)} samples")
     logger.info(f"Post-drift: {len(post_samples)} samples")
     
     # Prepare images
-    pre_images = [Image.fromarray(s["image_np"]) for s in pre_samples]
-    post_images = [Image.fromarray(s["image_np"]) for s in post_samples]
+    pre_images_np = [np.asarray(s["image_np"], dtype=np.uint8) for s in pre_samples]
+    post_images_np = [np.asarray(s["image_np"], dtype=np.uint8) for s in post_samples]
     
     from data.mvtec import get_transforms
     transform = get_transforms(augment=False)
     
-    pre_tensors = torch.stack([transform(img) for img in pre_images]).to(device)
-    post_tensors = torch.stack([transform(img) for img in post_images]).to(device)
+    from PIL import Image
+
+    pre_tensors = torch.stack([transform(Image.fromarray(img_np)) for img_np in pre_images_np]).to(device)
+    post_tensors = torch.stack([transform(Image.fromarray(img_np)) for img_np in post_images_np]).to(device)
     
     # ====================================================================
     # Grad-CAM Analysis
@@ -100,43 +124,50 @@ def run_xai_analysis(checkpoint_data: Dict, device: torch.device, output_dir: Pa
     # LIME Analysis (on sample subset)
     # ====================================================================
     logger.info("Computing LIME analysis...")
+
+    import xai.lime_analysis as lime_analysis_module
+    effective_lime_perturbations = lime_perturbations or LIME_N_PERTURBATIONS
+    lime_analysis_module.LIME_N_PERTURBATIONS = effective_lime_perturbations
+    logger.info(f"  LIME perturbations: {effective_lime_perturbations}")
     
     sample_size = min(XAI_SAMPLE_SIZE, len(pre_samples), len(post_samples))
-    pre_sample_indices = np.random.choice(len(pre_samples), sample_size, replace=False)
-    post_sample_indices = np.random.choice(len(post_samples), sample_size, replace=False)
+    rng = np.random.default_rng(int(checkpoint_data.sample_index))
+    pre_sample_indices = rng.choice(len(pre_samples), sample_size, replace=False)
+    post_sample_indices = rng.choice(len(post_samples), sample_size, replace=False)
     
-    pre_sample_imgs = [pre_images[i] for i in pre_sample_indices]
-    post_sample_imgs = [post_images[i] for i in post_sample_indices]
-    
-    pre_lime_topk = []
-    post_lime_topk = []
-    
-    for img in pre_sample_imgs:
-        try:
-            topk = compute_lime_top_k(model, np.array(img), k=5, device=device)
-            pre_lime_topk.append(topk)
-        except Exception as e:
-            logger.warning(f"LIME failed on pre-drift sample: {e}")
-    
-    for img in post_sample_imgs:
-        try:
-            topk = compute_lime_top_k(model, np.array(img), k=5, device=device)
-            post_lime_topk.append(topk)
-        except Exception as e:
-            logger.warning(f"LIME failed on post-drift sample: {e}")
-    
-    if pre_lime_topk and post_lime_topk:
-        # Compute overlap
-        overlap_scores = []
-        for pre_set in pre_lime_topk:
-            for post_set in post_lime_topk:
-                ov = overlap_coefficient(pre_set, post_set)
-                overlap_scores.append(ov)
-        
-        if overlap_scores:
-            mean_overlap = np.mean(overlap_scores)
-            logger.info(f"  LIME overlap coefficient: {mean_overlap:.3f} (threshold: 0.50)")
-            results["lime"] = {"mean_overlap": float(mean_overlap)}
+    pre_sample_imgs = [pre_images_np[i] for i in pre_sample_indices]
+    post_sample_imgs = [post_images_np[i] for i in post_sample_indices]
+
+    old_lime_perturbations = lime_analysis_module.LIME_N_PERTURBATIONS
+    lime_analysis_module.LIME_N_PERTURBATIONS = effective_lime_perturbations
+
+    try:
+        pre_lime_topk = compute_lime_top_k(
+            model=model,
+            images_np=pre_sample_imgs,
+            transform=transform,
+            device=device,
+            n_samples=sample_size,
+        )
+        post_lime_topk = compute_lime_top_k(
+            model=model,
+            images_np=post_sample_imgs,
+            transform=transform,
+            device=device,
+            n_samples=sample_size,
+        )
+
+        mean_overlap = overlap_coefficient(pre_lime_topk, post_lime_topk)
+        logger.info(f"  LIME overlap coefficient: {mean_overlap:.3f} (threshold: 0.50)")
+        results["lime"] = {
+            "mean_overlap": float(mean_overlap),
+            "n_samples": int(sample_size),
+            "n_perturbations": int(effective_lime_perturbations),
+        }
+    except Exception:
+        logger.exception("LIME replay failed")
+    finally:
+        lime_analysis_module.LIME_N_PERTURBATIONS = old_lime_perturbations
     
     # ====================================================================
     # Save Results
@@ -170,7 +201,12 @@ def main():
     
     # Run XAI
     output_dir = Path(args.output_dir) if args.output_dir else XAI_CHECKPOINT_DIR / "xai_results"
-    run_xai_analysis(checkpoint, device, output_dir)
+    run_xai_analysis(
+        checkpoint_data=checkpoint,
+        device=device,
+        output_dir=output_dir,
+        lime_perturbations=args.override_lime_perturbations,
+    )
 
 
 if __name__ == "__main__":

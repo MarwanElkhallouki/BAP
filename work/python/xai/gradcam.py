@@ -67,6 +67,11 @@ def compute_ada(heatmap: np.ndarray, defect_mask: np.ndarray) -> float:
     CAM is binarised by thresholding at the GRADCAM_TOP_PERCENTILE-th percentile
     (default 80th → top 20 % of activated pixels).
     """
+    if defect_mask.shape != heatmap.shape:
+        mask_tensor = torch.tensor(defect_mask, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+        resized = F.interpolate(mask_tensor, size=heatmap.shape, mode="nearest")
+        defect_mask = resized.squeeze(0).squeeze(0).cpu().numpy()
+
     threshold = np.percentile(heatmap, GRADCAM_TOP_PERCENTILE)
     binary_cam  = (heatmap >= threshold).astype(np.uint8)
     binary_mask = (defect_mask > 0).astype(np.uint8)

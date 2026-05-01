@@ -1,15 +1,16 @@
 """Core inference + drift-detection + XAI pipeline (thesis §3.1).
 
 Flow per sample:
-  image → ResNet-50 → prediction → error signal → 5 detectors in parallel
-                                                 ↓ (on alarm)
-                                      XAI analysis on pre/post-drift windows
+  image → ResNet-50 → prediction → error signal → active drift detectors
+                                                   ↓ (on alarm)
+                                        XAI analysis on pre/post-drift windows
 
 Usage: instantiate Pipeline, then call .run(stream).
 """
 
 from __future__ import annotations
 
+from bisect import bisect_right
 import logging
 import random
 from dataclasses import dataclass, field
@@ -30,23 +31,19 @@ from config import (
     XAI_PRE_DRIFT_WINDOW,
     XAI_SAMPLE_SIZE,
     SAVE_XAI_CHECKPOINTS,
-    USE_DINO_FEATURE_DRIFT,
     OUTPUT_DIR,
+    XAI_SCALE_GRADCAM_LARGE_THRESHOLD,
+    XAI_SCALE_LIME_LARGE_THRESHOLD,
+    XAI_SCALE_GRADCAM_WEIGHT,
+    XAI_SCALE_LIME_WEIGHT,
+    XAI_SCALE_COMBINED_LARGE_THRESHOLD,
 )
 from data.mvtec import load_defect_mask
 from drift.detectors import make_all_detectors
-from evaluation.metrics import DetectorResult, classify_alarms
+from evaluation.metrics import DetectorResult
 from xai.gradcam import compute_gradcam, compute_ada, mean_heatmap, change_map
 from xai.lime_analysis import compute_lime_top_k, overlap_coefficient
 from checkpoint.xai_checkpoint import XAICheckpoint, save_xai_checkpoint, checkpoint_filename
-
-# Phase 6: Optional DINO feature extraction
-if USE_DINO_FEATURE_DRIFT:
-    try:
-        from models.dino import DINOFeatureExtractor
-    except ImportError:
-        logger.warning("DINO not available; disabling DINO features")
-        USE_DINO_FEATURE_DRIFT = False
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +56,8 @@ class AlarmEvent:
     drift_type: str = "unknown"                # Phase 7: "corruption", "defect", "geometric"
     scale: str = None                          # Phase 7: "small", "large", or None
     xai: dict = field(default_factory=dict)   # populated after XAI analysis
+    inferred_scale: str | None = None         # inferred from XAI outputs
+    scale_interpretation: dict = field(default_factory=dict)  # rationale and scores
     checkpoint_path: str = None                # Phase 4: path to saved checkpoint
 
 
@@ -71,7 +70,6 @@ class StreamRecord:
     score:      float          # defective-class confidence
     severity:   int
     path:       str
-    dino_feature: np.ndarray = None  # Phase 6: optional DINO feature vector
     drift_type: str = "unknown"      # Phase 7: from stream metadata
     scale: str = None                # Phase 7: from stream metadata
 
@@ -103,17 +101,13 @@ class Pipeline:
         # Rolling buffer (kept to avoid unbounded memory growth)
         self._buffer: list[StreamRecord] = []
         self._buffer_cap = XAI_PRE_DRIFT_WINDOW + XAI_POST_DRIFT_WINDOW + 50
-        
-        # Phase 6: DINO feature extractor (optional)
-        self.dino_extractor = None
-        if USE_DINO_FEATURE_DRIFT:
-            try:
-                from models.dino import DINOFeatureExtractor
-                self.dino_extractor = DINOFeatureExtractor(device=device)
-                logger.info("DINO feature extractor initialized")
-            except Exception as e:
-                logger.warning(f"Failed to initialize DINO extractor: {e}")
-        
+        # Full-stream metric bookkeeping (independent from rolling XAI buffer)
+        self._labels_by_sev: dict[int, list[int]] = {}
+        self._scores_by_sev: dict[int, list[float]] = {}
+        # Per-severity reservoir for ADA (keeps memory bounded while covering full stream)
+        self._ada_reservoir_by_sev: dict[int, list[StreamRecord]] = {}
+        self._ada_seen_defective_by_sev: dict[int, int] = {}
+
         # Phase 4: Checkpoint counter
         self._alarm_counter = 0
 
@@ -121,10 +115,10 @@ class Pipeline:
     # Inference
     # ------------------------------------------------------------------
     @torch.no_grad()
-    def _infer(self, img_np: np.ndarray) -> tuple[int, float, np.ndarray]:
-        """Inference + optional DINO feature extraction.
-        
-        Returns: (prediction, confidence, dino_feature_or_None)
+    def _infer(self, img_np: np.ndarray) -> tuple[int, float]:
+        """Inference step.
+
+        Returns: (prediction, confidence)
         """
         self.model.eval()
         from PIL import Image as _PIL
@@ -133,16 +127,8 @@ class Pipeline:
         probs  = F.softmax(self.model(tensor), dim=1).squeeze()
         pred   = int(probs.argmax().item())
         score  = float(probs[1].item())   # confidence for defective class
-        
-        # Phase 6: Optional DINO feature
-        dino_feat = None
-        if self.dino_extractor is not None:
-            try:
-                dino_feat = self.dino_extractor.extract(img_np)
-            except Exception as e:
-                logger.warning(f"DINO extraction failed: {e}")
-        
-        return pred, score, dino_feat
+
+        return pred, score
 
     # ------------------------------------------------------------------
     # XAI (triggered on alarm)
@@ -153,7 +139,7 @@ class Pipeline:
         pre_recs  = self._buffer[pre_start:alarm_buf_idx]
         post_recs = self._buffer[alarm_buf_idx: alarm_buf_idx + XAI_POST_DRIFT_WINDOW]
 
-        if not pre_recs:
+        if not pre_recs or not post_recs:
             return {}
 
         def to_tensors(recs: list[StreamRecord]) -> torch.Tensor:
@@ -177,14 +163,78 @@ class Pipeline:
         cam_change = change_map(mean_heatmap(pre_cam), mean_heatmap(post_cam))
 
         # --- LIME (Phase 5: reduce perturbations if needed) ---
-        pre_lime  = compute_lime_top_k(self.model, pre_imgs,  self.transform, self.device)
-        post_lime = compute_lime_top_k(self.model, post_imgs, self.transform, self.device)
+        pre_lime  = compute_lime_top_k(
+            self.model, pre_imgs, self.transform, self.device, n_samples=XAI_SAMPLE_SIZE
+        )
+        post_lime = compute_lime_top_k(
+            self.model, post_imgs, self.transform, self.device, n_samples=XAI_SAMPLE_SIZE
+        )
         lime_ovlp = overlap_coefficient(pre_lime, post_lime)
 
         return {
             "gradcam_change_map":       cam_change,
             "lime_overlap_coefficient": lime_ovlp,
         }
+
+    def _infer_scale_from_xai(self, xai: dict) -> tuple[str | None, dict]:
+        """Infer alarm scale ('small'/'large') from available XAI signals."""
+        interpretation: dict = {"method": "rule-based-xai"}
+        components: list[tuple[float, float, str]] = []  # (component_score, weight, reason)
+
+        cam_change = xai.get("gradcam_change_map")
+        if cam_change is not None:
+            grad_mag = float(np.mean(np.abs(np.asarray(cam_change))))
+            grad_threshold = float(XAI_SCALE_GRADCAM_LARGE_THRESHOLD)
+            grad_score = min(1.0, grad_mag / grad_threshold) if grad_threshold > 0 else 0.0
+            grad_weight = float(XAI_SCALE_GRADCAM_WEIGHT)
+            if np.isfinite(grad_score) and np.isfinite(grad_weight) and grad_weight > 0:
+                components.append((grad_score, grad_weight, "gradcam"))
+            interpretation["gradcam_change_magnitude"] = grad_mag
+            interpretation["gradcam_large_threshold"] = grad_threshold
+            interpretation["gradcam_component_score"] = grad_score
+
+        lime_overlap = xai.get("lime_overlap_coefficient")
+        if lime_overlap is not None:
+            lime_overlap = float(lime_overlap)
+            lime_threshold = float(XAI_SCALE_LIME_LARGE_THRESHOLD)
+            if lime_threshold > 0:
+                lime_score = min(1.0, max(0.0, (lime_threshold - lime_overlap) / lime_threshold))
+            else:
+                lime_score = 0.0
+            lime_weight = float(XAI_SCALE_LIME_WEIGHT)
+            if np.isfinite(lime_score) and np.isfinite(lime_weight) and lime_weight > 0:
+                components.append((lime_score, lime_weight, "lime"))
+            interpretation["lime_overlap_coefficient"] = lime_overlap
+            interpretation["lime_large_threshold"] = lime_threshold
+            interpretation["lime_component_score"] = lime_score
+
+        if not components:
+            interpretation["status"] = "missing_xai_or_invalid_components"
+            interpretation["rationale"] = "No valid Grad-CAM/LIME alarm-level components available."
+            return None, interpretation
+
+        weighted_sum = sum(score * weight for score, weight, _ in components)
+        weight_total = sum(weight for _, weight, _ in components)
+        if weight_total <= 0:
+            interpretation["status"] = "invalid_weights"
+            interpretation["rationale"] = "Combined component weights are non-positive."
+            return None, interpretation
+        combined_score = weighted_sum / weight_total
+        interpretation["combined_large_score"] = float(combined_score)
+        interpretation["combined_large_threshold"] = float(XAI_SCALE_COMBINED_LARGE_THRESHOLD)
+        interpretation["used_components"] = [name for _, _, name in components]
+
+        inferred_scale = (
+            "large"
+            if combined_score >= float(XAI_SCALE_COMBINED_LARGE_THRESHOLD)
+            else "small"
+        )
+        interpretation["rationale"] = (
+            f"Large score {combined_score:.3f} "
+            f"{'>=' if inferred_scale == 'large' else '<'} "
+            f"{float(XAI_SCALE_COMBINED_LARGE_THRESHOLD):.3f}"
+        )
+        return inferred_scale, interpretation
 
     # ------------------------------------------------------------------
     # Main loop
@@ -203,7 +253,18 @@ class Pipeline:
                       (used to label alarms as TP/FP and compute latency)
         stream_len:   total number of samples — enables accurate ETA in progress bar
         """
-        drift_onsets = drift_onsets or []
+        drift_onsets = sorted(drift_onsets or [])
+        drift_onset_set = set(drift_onsets)
+        drift_event_severity: dict[int, int] = {}
+        claimed_onsets_by_detector: dict[str, set[int]] = {
+            det.name: set() for det in self.detectors
+        }
+        for result in self.det_results.values():
+            result.set_stream_context(
+                stream_len=stream_len,
+                drift_onsets=drift_onsets,
+                tolerance=DETECTION_TOLERANCE_WINDOW,
+            )
 
         _t_infer = 0.0
         _n_infer = 0
@@ -228,9 +289,11 @@ class Pipeline:
                 # Backwards compatibility: old format (img_np, label, severity, path)
                 img_np, label, severity, path = sample_data
                 drift_type, scale = "unknown", None
+            if sample_idx in drift_onset_set:
+                drift_event_severity[sample_idx] = int(severity)
             
             _t0 = time.perf_counter()
-            pred, score, dino_feat = self._infer(img_np)  # Phase 6: DINO features
+            pred, score = self._infer(img_np)
             _t_infer += time.perf_counter() - _t0
             _n_infer += 1
             if global_pbar is not None:
@@ -240,13 +303,24 @@ class Pipeline:
             # Phase 7: Include drift type and scale metadata
             rec = StreamRecord(
                 img_np, label, pred, score, severity, path,
-                dino_feature=dino_feat,
                 drift_type=drift_type,
                 scale=scale,
             )
             self._buffer.append(rec)
             if len(self._buffer) > self._buffer_cap:
                 self._buffer.pop(0)
+            self._labels_by_sev.setdefault(severity, []).append(label)
+            self._scores_by_sev.setdefault(severity, []).append(score)
+            if label == 1:
+                seen = self._ada_seen_defective_by_sev.get(severity, 0) + 1
+                self._ada_seen_defective_by_sev[severity] = seen
+                reservoir = self._ada_reservoir_by_sev.setdefault(severity, [])
+                if len(reservoir) < XAI_SAMPLE_SIZE:
+                    reservoir.append(rec)
+                else:
+                    replace_at = random.randint(0, seen - 1)
+                    if replace_at < XAI_SAMPLE_SIZE:
+                        reservoir[replace_at] = rec
 
             buf_idx = len(self._buffer) - 1
 
@@ -259,12 +333,20 @@ class Pipeline:
                         "[%s] alarm at sample %d (severity=%d)", det.name, sample_idx, severity
                     )
                     # Determine if TP/FP and compute latency
-                    onset = next(
-                        (o for o in sorted(drift_onsets, reverse=True) if o <= sample_idx), None
+                    onset_i = bisect_right(drift_onsets, sample_idx) - 1
+                    onset = drift_onsets[onset_i] if onset_i >= 0 else None
+                    claimed_onsets = claimed_onsets_by_detector[det.name]
+                    is_tp = (
+                        onset is not None
+                        and onset not in claimed_onsets
+                        and (sample_idx - onset) < DETECTION_TOLERANCE_WINDOW
                     )
-                    is_tp  = onset is not None and (sample_idx - onset) < DETECTION_TOLERANCE_WINDOW
+                    if is_tp:
+                        claimed_onsets.add(onset)
                     latency = (sample_idx - onset) if (onset is not None and is_tp) else None
-                    self.det_results[det.name].record_alarm(sample_idx, is_tp, latency)
+                    self.det_results[det.name].record_alarm(
+                        sample_idx, is_tp, latency, severity=severity
+                    )
 
                     alarm = AlarmEvent(
                         detector_name=det.name,
@@ -338,6 +420,7 @@ class Pipeline:
                                 self._xai_last[det.name] = sample_idx
                             except Exception as exc:
                                 logger.warning("XAI failed: %s", exc)
+                    alarm.inferred_scale, alarm.scale_interpretation = self._infer_scale_from_xai(alarm.xai)
                     self.alarms.append(alarm)
 
             # --- progress bar postfix ---
@@ -356,10 +439,8 @@ class Pipeline:
             elif mean_xai is not None:
                 pbar.set_postfix({"xai_calls": _n_xai, "xai_avg": _fmt(mean_xai)}, refresh=False)
 
-            if DISABLE_DETECTOR_AFTER_ALARM and len(self._disabled_detectors) >= len(self.detectors):
-                logger.info("All detectors have fired — stopping stream at sample %d", sample_idx)
-                break
-
+        for result in self.det_results.values():
+            result.set_stream_context(drift_event_severity=drift_event_severity)
         return self.alarms, self.det_results
 
     # ------------------------------------------------------------------
@@ -369,14 +450,11 @@ class Pipeline:
         """Mean ADA score at each severity over up to XAI_SAMPLE_SIZE defective images."""
         from xai.gradcam import compute_gradcam, compute_ada
 
-        defective_by_sev: dict[int, list[StreamRecord]] = {}
-        for rec in self._buffer:
-            if rec.label == 1:
-                defective_by_sev.setdefault(rec.severity, []).append(rec)
-
         ada_curve: dict[int, float] = {}
-        for sev, recs in defective_by_sev.items():
-            chosen = random.sample(recs, min(XAI_SAMPLE_SIZE, len(recs)))
+        for sev, recs in self._ada_reservoir_by_sev.items():
+            if not recs:
+                continue
+            chosen = list(recs)
             scores = []
             for rec in chosen:
                 mask = load_defect_mask(MVTEC_ROOT, self.category, rec.path)
@@ -397,9 +475,4 @@ class Pipeline:
     # ------------------------------------------------------------------
     def compute_auroc_curve(self) -> dict[int, float]:
         from evaluation.metrics import auroc_at_severity
-        labels_by_sev: dict[int, list[int]]   = {}
-        scores_by_sev: dict[int, list[float]] = {}
-        for rec in self._buffer:
-            labels_by_sev.setdefault(rec.severity, []).append(rec.label)
-            scores_by_sev.setdefault(rec.severity, []).append(rec.score)
-        return auroc_at_severity(labels_by_sev, scores_by_sev)
+        return auroc_at_severity(self._labels_by_sev, self._scores_by_sev)

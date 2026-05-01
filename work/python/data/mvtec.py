@@ -1,7 +1,8 @@
 """MVTec AD dataset loader for binary classification (normal vs defective).
 
-Training split: all 'good' images from train/ + 2 defect types from test/.
-Test split:     full test/ directory (good + all defect types).
+Split policy is category-specific and configured in ``config.MVTEC_DEFECT_SPLIT_POLICY``:
+- Training split: ``train/good`` + configured "known" train defect types.
+- Test split: ``test/good`` + configured held-out (novel) defect types only.
 
 MVTec directory layout expected:
     <root>/<category>/train/good/*.png
@@ -21,7 +22,7 @@ from torchvision import transforms
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import (
-    IMAGE_SIZE, IMAGENET_MEAN, IMAGENET_STD, MVTEC_TRAIN_DEFECT_TYPES
+    IMAGE_SIZE, IMAGENET_MEAN, IMAGENET_STD, get_mvtec_defect_split
 )
 
 
@@ -39,36 +40,62 @@ class MVTecDataset(Dataset):
         transform: Optional[transforms.Compose] = None,
         corruption_fn: Optional[Callable] = None,
     ):
-        assert split in ("train", "test"), f"Unknown split: {split}"
+        if split not in ("train", "test"):
+            raise ValueError(f"Unknown split: {split}")
         self.root = Path(root) / category
         self.category = category
         self.split = split
         self.transform = transform
         self.corruption_fn = corruption_fn
         self.samples: list[tuple[Path, int]] = []
+        self.defect_split = get_mvtec_defect_split(category)
 
         if split == "train":
-            self._load_train(category)
+            self._load_train()
         else:
             self._load_test()
 
-    def _load_train(self, category: str) -> None:
+    @staticmethod
+    def _iter_image_files(directory: Path) -> list[Path]:
+        return sorted(directory.glob("*.png")) + sorted(directory.glob("*.jpg"))
+
+    def _load_train(self) -> None:
         good_dir = self.root / "train" / "good"
-        for p in sorted(good_dir.glob("*.png")):
+        if not good_dir.is_dir():
+            raise FileNotFoundError(f"Missing MVTec training good directory: {good_dir}")
+
+        for p in self._iter_image_files(good_dir):
             self.samples.append((p, 0))
 
-        for defect_type in MVTEC_TRAIN_DEFECT_TYPES.get(category, [])[:2]:
-            defect_dir = self.root / "test" / defect_type
-            if defect_dir.exists():
-                for p in sorted(defect_dir.glob("*.png")):
-                    self.samples.append((p, 1))
+        test_dir = self.root / "test"
+        for defect_type in self.defect_split["train"]:
+            defect_dir = test_dir / defect_type
+            if not defect_dir.is_dir():
+                raise FileNotFoundError(
+                    f"Configured training defect directory not found for "
+                    f"category='{self.category}', defect='{defect_type}': {defect_dir}"
+                )
+            for p in self._iter_image_files(defect_dir):
+                self.samples.append((p, 1))
 
     def _load_test(self) -> None:
         test_dir = self.root / "test"
-        for defect_dir in sorted(test_dir.iterdir()):
-            label = 0 if defect_dir.name == "good" else 1
-            for p in sorted(defect_dir.glob("*.png")):
-                self.samples.append((p, label))
+        good_dir = test_dir / "good"
+        if not good_dir.is_dir():
+            raise FileNotFoundError(f"Missing MVTec test good directory: {good_dir}")
+
+        for p in self._iter_image_files(good_dir):
+            self.samples.append((p, 0))
+
+        for defect_type in self.defect_split["holdout"]:
+            defect_dir = test_dir / defect_type
+            if not defect_dir.is_dir():
+                raise FileNotFoundError(
+                    f"Configured held-out defect directory not found for "
+                    f"category='{self.category}', defect='{defect_type}': {defect_dir}"
+                )
+            for p in self._iter_image_files(defect_dir):
+                self.samples.append((p, 1))
 
     def __len__(self) -> int:
         return len(self.samples)

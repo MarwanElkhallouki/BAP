@@ -1,11 +1,11 @@
 """Phase 1: Held-out defect dataset loader for concept drift simulation.
 
-Loads defect types NOT included in training set per MVTec AD category,
+Loads held-out defect types configured in ``config.MVTEC_DEFECT_SPLIT_POLICY``,
 simulating arrival of novel defect types in production.
 
 Public API:
     get_holdout_defect_types(category) -> list[str]
-    load_holdout_defects(mvtec_root, category, transform) -> (images, labels, paths)
+    load_holdout_defects(category, transform) -> (images, labels, paths)
 """
 
 from pathlib import Path
@@ -14,46 +14,27 @@ import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
 
-from config import MVTEC_TRAIN_DEFECT_TYPES, MVTEC_ROOT
-from data.mvtec import MVTecDataset
+from config import MVTEC_ROOT, get_mvtec_defect_split
 
 
 def get_holdout_defect_types(category: str) -> List[str]:
-    """Return defect types NOT in training for this category.
-    
-    Training includes 2 defect types per category (see config.MVTEC_TRAIN_DEFECT_TYPES).
-    Holdout types are all remaining defects in the test set.
+    """Return configured held-out defect types for this category.
     
     Args:
-        category: one of ["carpet", "bottle", "metal_nut", "transistor", "leather"]
+        category: MVTec category present in split config.
     
     Returns:
-        List of defect type names (e.g., ["hole", "contamination"] for carpet).
+        Sorted list of held-out defect type names.
     """
-    if category not in MVTEC_TRAIN_DEFECT_TYPES:
-        raise ValueError(f"Unknown category: {category}")
-    
-    # All test split subdirectories for this category
-    cat_path = MVTEC_ROOT / category / "test"
-    all_defects = set()
-    
-    if cat_path.exists():
-        for subdir in cat_path.iterdir():
-            if subdir.is_dir() and subdir.name != "good":
-                all_defects.add(subdir.name)
-    
-    # Remove training defects to get holdouts
-    train_defects = set(MVTEC_TRAIN_DEFECT_TYPES.get(category, []))
-    holdout_defects = list(sorted(all_defects - train_defects))
-    
-    return holdout_defects
+    split = get_mvtec_defect_split(category)
+    return sorted(split["holdout"])
 
 
 def load_holdout_defects(
     category: str,
     transform: Callable = None,
 ) -> Tuple[List[np.ndarray], List[int], List[str]]:
-    """Load all held-out defect images from test set.
+    """Load all configured held-out defect images from test set.
     
     Args:
         category: MVTec category
@@ -65,38 +46,41 @@ def load_holdout_defects(
           - labels: list of int (1 for defective)
           - paths: list of str (original file paths)
     """
-    holdout_types = get_holdout_defect_types(category)
+    split = get_mvtec_defect_split(category)
+    holdout_types = sorted(split["holdout"])
     images = []
     labels = []
     paths = []
     
     cat_root = MVTEC_ROOT / category
     test_root = cat_root / "test"
+    if not test_root.is_dir():
+        raise FileNotFoundError(f"Missing test directory for category '{category}': {test_root}")
     
     for defect_type in holdout_types:
         defect_path = test_root / defect_type
-        if not defect_path.exists():
-            continue
+        if not defect_path.is_dir():
+            raise FileNotFoundError(
+                f"Configured held-out defect directory not found for "
+                f"category='{category}', defect='{defect_type}': {defect_path}"
+            )
         
         for img_file in sorted(defect_path.glob("*.png")) + sorted(defect_path.glob("*.jpg")):
-            try:
-                img_pil = Image.open(img_file).convert("RGB")
-                
-                if transform:
-                    # transform returns tensor; convert back to np for consistency
-                    transformed = transform(img_pil)
-                    if hasattr(transformed, 'numpy'):
-                        img_arr = transformed.numpy()
-                    else:
-                        img_arr = np.array(transformed)
+            img_pil = Image.open(img_file).convert("RGB")
+
+            if transform:
+                # transform returns tensor; convert back to np for consistency
+                transformed = transform(img_pil)
+                if hasattr(transformed, 'numpy'):
+                    img_arr = transformed.numpy()
                 else:
-                    img_arr = np.array(img_pil)
-                
-                images.append(img_arr)
-                labels.append(1)  # defective
-                paths.append(str(img_file))
-            except Exception as e:
-                print(f"Warning: Failed to load {img_file}: {e}")
+                    img_arr = np.array(transformed)
+            else:
+                img_arr = np.array(img_pil)
+
+            images.append(img_arr)
+            labels.append(1)  # defective
+            paths.append(str(img_file))
     
     return images, labels, paths
 

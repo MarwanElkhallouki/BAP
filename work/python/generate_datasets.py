@@ -21,11 +21,11 @@ from PIL import Image
 from tqdm import tqdm
 
 # Ensure the script is run with the repository virtual environment.
-if ".venv" not in str(Path(sys.executable).resolve()).lower():
-    print("ERROR: Please run this script with the repository virtual environment:")
-    print("  f:/git/BAP/.venv/Scripts/python.exe generate_datasets.py")
-    print("If you already installed dependencies, use the venv python interpreter.")
-    sys.exit(1)
+# if ".venv" not in str(Path(sys.executable).resolve()).lower():
+#     print("ERROR: Please run this script with the repository virtual environment:")
+#     print("  f:/git/BAP/.venv/Scripts/python.exe generate_datasets.py")
+#     print("If you already installed dependencies, use the venv python interpreter.")
+#     sys.exit(1)
 
 # Use the local robustness/ImageNet-C package instead of a PyPI-installed one.
 ROOT_DIR = Path(__file__).resolve().parents[1]

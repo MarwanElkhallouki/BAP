@@ -18,6 +18,28 @@ from torch.utils.data import DataLoader
 from torchvision import models
 
 
+def _build_loss_for_train_labels(
+    all_train_labels: list[int],
+    device: torch.device,
+) -> nn.Module:
+    """Build robust CE loss with inverse-frequency class weighting when possible."""
+    if not all_train_labels:
+        return nn.CrossEntropyLoss()
+
+    label_tensor = torch.tensor(all_train_labels, dtype=torch.long)
+    counts = torch.bincount(label_tensor, minlength=2).float()
+    if torch.any(counts == 0):
+        print(
+            "  Warning: train split has a missing class "
+            f"(good={int(counts[0].item())}, defect={int(counts[1].item())}); "
+            "using unweighted cross-entropy."
+        )
+        return nn.CrossEntropyLoss()
+
+    weights = counts.sum() / (len(counts) * counts)
+    return nn.CrossEntropyLoss(weight=weights.to(device))
+
+
 def build_model(pretrained: bool = True) -> nn.Module:
     weights = models.ResNet50_Weights.IMAGENET1K_V1 if pretrained else None
     model = models.resnet50(weights=weights)
@@ -83,10 +105,7 @@ def fine_tune(
     all_train_labels = []
     for _, lbls, _ in train_loader:
         all_train_labels.extend(lbls.tolist())
-    counts = torch.bincount(torch.tensor(all_train_labels))
-    weights = (1.0 / counts.float())
-    weights = (weights / weights.sum() * len(counts)).to(device)
-    criterion = nn.CrossEntropyLoss(weight=weights)
+    criterion = _build_loss_for_train_labels(all_train_labels, device)
     best_f1 = 0.0
     patience_counter = 0
     best_state: dict | None = None
