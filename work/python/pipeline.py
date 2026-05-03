@@ -43,7 +43,12 @@ from drift.detectors import make_all_detectors
 from evaluation.metrics import DetectorResult
 from xai.gradcam import compute_gradcam, compute_ada, mean_heatmap, change_map
 from xai.lime_analysis import compute_lime_top_k, overlap_coefficient
-from checkpoint.xai_checkpoint import XAICheckpoint, save_xai_checkpoint, checkpoint_filename
+from checkpoint.xai_checkpoint import (
+    XAICheckpoint,
+    checkpoint_filename,
+    minimal_scale_interpretation_dict,
+    save_xai_checkpoint,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -355,56 +360,15 @@ class Pipeline:
                         drift_type=drift_type,
                         scale=scale,
                     )
+                    xai_ran_successfully = False
                     if DISABLE_DETECTOR_AFTER_ALARM:
                         if buf_idx >= XAI_PRE_DRIFT_WINDOW // 2:
                             try:
                                 _t0_xai = time.perf_counter()
                                 alarm.xai = self._xai_window(buf_idx)
+                                xai_ran_successfully = True
                                 _t_xai += time.perf_counter() - _t0_xai
-                                _n_xai  += 1
-                                
-                                # Phase 4: Save checkpoint before XAI
-                                if SAVE_XAI_CHECKPOINTS:
-                                    try:
-                                        pre_recs = self._buffer[max(0, buf_idx - XAI_PRE_DRIFT_WINDOW):buf_idx]
-                                        post_recs = self._buffer[buf_idx:buf_idx + XAI_POST_DRIFT_WINDOW]
-                                        
-                                        pre_samples = [{
-                                            "image_np": r.image_np, "prediction": r.prediction, 
-                                            "confidence": r.score, "label": r.label, "path": r.path
-                                        } for r in pre_recs[-XAI_SAMPLE_SIZE:]]
-                                        
-                                        post_samples = [{
-                                            "image_np": r.image_np, "prediction": r.prediction,
-                                            "confidence": r.score, "label": r.label, "path": r.path
-                                        } for r in post_recs[:XAI_SAMPLE_SIZE]]
-                                        
-                                        ckpt = XAICheckpoint(
-                                            detector_name=det.name,
-                                            sample_index=sample_idx,
-                                            drift_type=drift_type,
-                                            scale=scale,
-                                            category=self.category,
-                                            corruption_type=self.corruption_type,
-                                            severity=severity,
-                                            model_state_dict=self.model.state_dict(),
-                                            pre_drift_samples=pre_samples,
-                                            post_drift_samples=post_samples,
-                                        )
-                                        
-                                        ckpt_name = checkpoint_filename(
-                                            self.category,
-                                            self.corruption_type,
-                                            det.name,
-                                            self._alarm_counter,
-                                        )
-                                        ckpt_path = OUTPUT_DIR / "xai_checkpoints" / ckpt_name
-                                        save_xai_checkpoint(ckpt, ckpt_path)
-                                        alarm.checkpoint_path = str(ckpt_path)
-                                        self._alarm_counter += 1
-                                    except Exception as exc:
-                                        logger.warning("Checkpoint save failed: %s", exc)
-                                
+                                _n_xai += 1
                             except Exception as exc:
                                 logger.warning("XAI failed: %s", exc)
                         self._disabled_detectors.add(det.name)
@@ -415,12 +379,60 @@ class Pipeline:
                             try:
                                 _t0_xai = time.perf_counter()
                                 alarm.xai = self._xai_window(buf_idx)
+                                xai_ran_successfully = True
                                 _t_xai += time.perf_counter() - _t0_xai
-                                _n_xai  += 1
+                                _n_xai += 1
                                 self._xai_last[det.name] = sample_idx
                             except Exception as exc:
                                 logger.warning("XAI failed: %s", exc)
+
                     alarm.inferred_scale, alarm.scale_interpretation = self._infer_scale_from_xai(alarm.xai)
+
+                    if DISABLE_DETECTOR_AFTER_ALARM and SAVE_XAI_CHECKPOINTS and xai_ran_successfully:
+                        try:
+                            pre_recs = self._buffer[max(0, buf_idx - XAI_PRE_DRIFT_WINDOW):buf_idx]
+                            post_recs = self._buffer[buf_idx:buf_idx + XAI_POST_DRIFT_WINDOW]
+
+                            pre_samples = [{
+                                "image_np": r.image_np, "prediction": r.prediction,
+                                "confidence": r.score, "label": r.label, "path": r.path
+                            } for r in pre_recs[-XAI_SAMPLE_SIZE:]]
+
+                            post_samples = [{
+                                "image_np": r.image_np, "prediction": r.prediction,
+                                "confidence": r.score, "label": r.label, "path": r.path
+                            } for r in post_recs[:XAI_SAMPLE_SIZE]]
+
+                            ckpt = XAICheckpoint(
+                                detector_name=det.name,
+                                sample_index=sample_idx,
+                                drift_type=drift_type,
+                                scale=scale,
+                                category=self.category,
+                                corruption_type=self.corruption_type,
+                                severity=severity,
+                                model_state_dict=self.model.state_dict(),
+                                pre_drift_samples=pre_samples,
+                                post_drift_samples=post_samples,
+                                inferred_scale=alarm.inferred_scale,
+                                scale_interpretation=minimal_scale_interpretation_dict(
+                                    alarm.scale_interpretation
+                                ),
+                            )
+
+                            ckpt_name = checkpoint_filename(
+                                self.category,
+                                self.corruption_type,
+                                det.name,
+                                self._alarm_counter,
+                            )
+                            ckpt_path = OUTPUT_DIR / "xai_checkpoints" / ckpt_name
+                            save_xai_checkpoint(ckpt, ckpt_path)
+                            alarm.checkpoint_path = str(ckpt_path)
+                            self._alarm_counter += 1
+                        except Exception as exc:
+                            logger.warning("Checkpoint save failed: %s", exc)
+
                     self.alarms.append(alarm)
 
             # --- progress bar postfix ---

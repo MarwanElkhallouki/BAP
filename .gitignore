@@ -145,11 +145,13 @@ CLAUDE.md
 work/python/data/**/*.png
 *.tar*
 *.zip
+work/python/checkpoints/*
 work/extract/*
 work/leather/*
 work/bottle/*
 work/carpet/*
 work/metal_nut/*
 work/transistor/*
+work/python/data/**
 *.pyc
 **/.venv

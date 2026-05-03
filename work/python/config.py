@@ -16,6 +16,10 @@ CORRUPTION_DATASETS    = Path("data/corruption_datasets")  # pre-computed
 CHECKPOINT_DIR         = Path("checkpoints")
 OUTPUT_DIR             = Path("output")
 XAI_CHECKPOINT_DIR     = OUTPUT_DIR / "xai_checkpoints"    # drift detection checkpoints
+XAI_SUPERPIXEL_EXPORT_DIR = OUTPUT_DIR / "xai_superpixels"  # Quickshift exports (notebook)
+# High-resolution figure export for the XAI visualization notebook (optional)
+SAVE_NOTEBOOK_FIGURES = False
+NOTEBOOK_FIGURE_EXPORT_DIR = OUTPUT_DIR / "notebook_figures"
 MODEL_CHECKPOINT_DIR   = Path("models/checkpoints")        # DINO-V3 fine-tuned weights
 
 # ---------------------------------------------------------------------------
@@ -161,7 +165,7 @@ VAL_SPLIT               = 0.20   # fraction of train set used for validation
 # ---------------------------------------------------------------------------
 # Runtime profile (laptop-first defaults)
 # ---------------------------------------------------------------------------
-LAPTOP_MODE = True
+LAPTOP_MODE = False
 
 # Guardrail for stream buffering during drift/XAI processing to avoid OOM.
 MAX_STREAM_IMAGES_IN_RAM = 512

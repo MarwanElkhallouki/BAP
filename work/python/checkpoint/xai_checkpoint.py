@@ -14,6 +14,35 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 import numpy as np
 
+
+def minimal_scale_interpretation_dict(
+    interpretation: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Subset of scale_interpretation safe for JSON checkpoint metadata."""
+    if not interpretation:
+        return None
+    keys = (
+        "combined_large_score",
+        "gradcam_change_magnitude",
+        "lime_overlap_coefficient",
+        "combined_large_threshold",
+        "gradcam_component_score",
+        "lime_component_score",
+        "status",
+        "rationale",
+        "used_components",
+    )
+    out: Dict[str, Any] = {}
+    for key in keys:
+        if key not in interpretation:
+            continue
+        val = interpretation[key]
+        if hasattr(val, "item"):
+            val = val.item()
+        out[key] = val
+    return out or None
+
+
 class XAICheckpoint:
     """Container for drift detection state to enable decoupled XAI replay."""
     
@@ -29,6 +58,9 @@ class XAICheckpoint:
         model_state_dict: Dict,
         pre_drift_samples: List[Dict],
         post_drift_samples: List[Dict],
+        *,
+        inferred_scale: Optional[str] = None,
+        scale_interpretation: Optional[Dict[str, Any]] = None,
     ):
         """Initialize checkpoint with drift metadata and sample buffers.
         
@@ -55,7 +87,9 @@ class XAICheckpoint:
         self.model_state_dict = model_state_dict
         self.pre_drift_samples = pre_drift_samples
         self.post_drift_samples = post_drift_samples
-        
+        self.inferred_scale = inferred_scale
+        self.scale_interpretation = scale_interpretation
+
         # Metadata
         self.n_pre = len(pre_drift_samples)
         self.n_post = len(post_drift_samples)
@@ -73,6 +107,8 @@ class XAICheckpoint:
                 "severity": int(self.severity) if self.severity is not None else None,
                 "n_pre": self.n_pre,
                 "n_post": self.n_post,
+                "inferred_scale": self.inferred_scale,
+                "scale_interpretation": self.scale_interpretation,
             },
             "samples": {
                 "pre_drift": [
@@ -122,6 +158,8 @@ class XAICheckpoint:
             model_state_dict=model_state_dict,
             pre_drift_samples=pre_drift,
             post_drift_samples=post_drift,
+            inferred_scale=meta.get("inferred_scale"),
+            scale_interpretation=meta.get("scale_interpretation"),
         )
 
 
@@ -180,6 +218,14 @@ def _validate_json_schema(data: Dict[str, Any]) -> None:
     severity = metadata.get("severity")
     if severity is not None:
         _validate_int(severity, "metadata.severity")
+
+    inferred_scale = metadata.get("inferred_scale")
+    if inferred_scale is not None and not isinstance(inferred_scale, str):
+        _raise_schema_error("metadata.inferred_scale", f"expected str or None, got {type(inferred_scale).__name__}")
+
+    scale_interpretation = metadata.get("scale_interpretation")
+    if scale_interpretation is not None:
+        _validate_type(scale_interpretation, dict, "metadata.scale_interpretation")
 
     pre_samples = _require_key(samples, "pre_drift", "samples")
     post_samples = _require_key(samples, "post_drift", "samples")
